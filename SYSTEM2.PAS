@@ -68,7 +68,7 @@ BFILE = RECORD
         filetype    : TFILETYPE;
         ioresult    : INTEGER;
         is_open     : BOOLEAN;
-        buf         : BFILE_BUF;
+        buf         : ^BFILE_BUF;
         buf_page    : DWORD;
         buf_update  : BOOLEAN;
         buf_count   : WORD;
@@ -91,10 +91,11 @@ PROCEDURE ReWriteTemp (VAR f : BFILE);
 
 { ReWriteMemFile does not requre call to Assign.
   size - amount of 16K pages }
-PROCEDURE ReWriteMemFile (VAR f : BFILE; size : WORD);
+PROCEDURE ReWriteMemFile (VAR f : BFILE; size : DWORD);
 
 FUNCTION Eof (VAR f : BFILE) : BOOLEAN;
 PROCEDURE Flush (VAR f : BFILE);
+PROCEDURE SetDeleteOnClose(VAR f : BFILE; flag : BOOLEAN);
 PROCEDURE Close (VAR f : BFILE);
 FUNCTION IsOpen(VAR f : BFILE):BOOLEAN;
 
@@ -104,6 +105,10 @@ FUNCTION ReadDWord(VAR f : BFILE) : DWORD;
 PROCEDURE ReadLn (VAR f : BFILE; VAR s : STRING);
 FUNCTION BlockRead (VAR f : BFILE; VAR d; count : WORD) : WORD;
 
+FUNCTION GetByte(VAR f : BFILE; ofs : DWORD) : BYTE;
+FUNCTION GetWord(VAR f : BFILE; ofs : DWORD) : WORD;
+FUNCTION GetDWord(VAR f : BFILE; ofs : DWORD) : DWORD;
+
 PROCEDURE WriteByte(VAR f : BFILE; b : BYTE);
 PROCEDURE WriteWord(VAR f : BFILE; w : WORD);
 PROCEDURE WriteDWord(VAR f : BFILE; dw : DWORD);
@@ -111,11 +116,15 @@ PROCEDURE Write (VAR f : BFILE; s : STRING);
 PROCEDURE WriteLn (VAR f : BFILE; s : STRING);
 PROCEDURE BlockWrite (VAR f : BFILE; VAR d; count : WORD);
 
-PROCEDURE IncByte(VAR f : BFILE; b : BYTE);
-PROCEDURE IncWord(VAR f : BFILE; w : WORD);
-PROCEDURE IncDWord(VAR f : BFILE; dw : DWORD);
+PROCEDURE IncByte(VAR f : BFILE; ofs : DWORD; b : BYTE);
+PROCEDURE IncWord(VAR f : BFILE; ofs : DWORD; w : WORD);
+PROCEDURE IncDWord(VAR f : BFILE; ofs : DWORD; dw : DWORD);
 
-PROCEDURE BlockCopy (VAR src, dst : BFILE; count : DWORD);
+PROCEDURE SetByte(VAR f : BFILE; ofs : DWORD; b : BYTE);
+PROCEDURE SetWord(VAR f : BFILE; ofs : DWORD; w : WORD);
+PROCEDURE SegDWord(VAR f : BFILE; ofs : DWORD; dw : DWORD);
+
+FUNCTION BlockCopy (VAR src, dst : BFILE; count : DWORD) : DWORD;
 
 PROCEDURE Seek (VAR f : BFILE; pos : DWORD);
 FUNCTION FilePos (VAR f : BFILE) : DWORD;
@@ -605,6 +614,8 @@ END;
 PROCEDURE ReWrite(VAR f : BFILE);
 BEGIN
         IF f.is_open THEN EXIT;
+        GetMem(f.buf, SizeOf(BFILE_BUF));
+        IF f.buf = NIL THEN EXIT;
         fname := f.filename + #0;
         f.ioresult := 0;
         f.f := lReWrite;
@@ -618,11 +629,14 @@ BEGIN
         f.delonclose := FALSE;
         f.filetype := FS_FILE;
         InitCache(f);
+        IF NOT f.is_open THEN BEGIN FreeMem(f.buf, SizeOf(BFILE_BUF)); f.buf := NIL; END;
 END;
 
 PROCEDURE Reset(VAR f : BFILE);
 BEGIN
         IF f.is_open THEN EXIT;
+        GetMem(f.buf, SizeOf(BFILE_BUF));
+        IF f.buf = NIL THEN EXIT;
         f.ioresult := 0;
         fname := f.filename + #0;
         f.f := lReset;
@@ -640,10 +654,11 @@ BEGIN
                 lSeek(f.f, SEEK_END, 0);
                 f.fsize := lTell(f.f);
                 lSeek(f.f, SEEK_BEG, 0);
-                f.buf_count := lRead(f.f, f.buf, SizeOf(BFILE_BUF));
+                f.buf_count := lRead(f.f, f.buf^[0], SizeOf(BFILE_BUF));
                 if res <> 0 THEN f.ioresult := 100;
         END;
         InitCache(f);
+        IF NOT f.is_open THEN BEGIN FreeMem(f.buf, SizeOf(BFILE_BUF)); f.buf := NIL; END;
 END;
 
 PROCEDURE Append (VAR f : BFILE);
@@ -673,14 +688,19 @@ BEGIN
         Assign(f, tmp + name);
         ReWrite(f);
         Truncate(f);
-        f.delonclose := TRUE;
+        SetDeleteOnClose(f, TRUE);
 END;
 
-PROCEDURE ReWriteMemFile(VAR f : BFILE; size : WORD);
-VAR     s : STRING;
+PROCEDURE ReWriteMemFile(VAR f : BFILE; size : DWORD);
+VAR     s             : STRING;
+        size_in_pages : WORD;
 BEGIN
+        size_in_pages := (size SHR 14) AND $FFFF;
+        IF (size AND $3FFF) <> 0 THEN Inc(size_in_pages);
         FillChar(f, SizeOf(BFILE), #0);
-        f.sysmem_ptr := sysmem_alloc(size);
+        GetMem(f.buf, SizeOf(BFILE_BUF));
+        IF f.buf = NIL THEN EXIT;
+        f.sysmem_ptr := sysmem_alloc(size_in_pages);
         f.is_open := f.sysmem_ptr <> NIL;
         f.has_cache := f.sysmem_ptr <> NIL;
         IF f.is_open THEN BEGIN
@@ -688,6 +708,14 @@ BEGIN
                 f.filetype := MEM_FILE;
                 f.filename := 'MEM:FILE' + s + '.TMP';
         END;
+        IF NOT f.is_open THEN BEGIN FreeMem(f.buf, SizeOf(BFILE_BUF)); f.buf := NIL; END;
+END;
+
+PROCEDURE UpdateFileSize(VAR f : BFILE);
+VAR     ns : DWORD;
+BEGIN
+        ns := f.buf_page * SizeOf(BFILE_BUF) + f.buf_count;
+        IF f.fsize < ns THEN f.fsize := ns;
 END;
 
 FUNCTION Eof(VAR f : BFILE) : BOOLEAN;
@@ -697,6 +725,7 @@ BEGIN
                 EXIT;
         END;
         f.ioresult := 0;
+        UpdateFileSize(f);
         Eof := (f.buf_page * SizeOf(BFILE_BUF) + f.buf_pos) = f.fsize;
 END;
 
@@ -718,7 +747,7 @@ PROCEDURE StorePageToSysMem(VAR f : BFILE; i : INTEGER);
 BEGIN
         IF f.cache_pages[i].buf_update THEN Flush(f);
 
-        sysmem_put(f.sysmem_ptr, f.cache_pages[i].page, f.buf);
+        sysmem_put(f.sysmem_ptr, f.cache_pages[i].page, f.buf^[0]);
         f.cache_pages[i].buf_count := f.buf_count;
         f.cache_pages[i].buf_page := f.buf_page;
         f.cache_pages[i].buf_update := f.buf_update;
@@ -760,7 +789,7 @@ BEGIN
         WHILE (i < f.cache_size) AND (NOT r) DO BEGIN
                 IF f.cache_pages[i].notempty AND (f.cache_pages[i].buf_page = f.buf_page) THEN BEGIN
                         MakeCachedPageTop(f, i);
-                        sysmem_get(f.sysmem_ptr, f.cache_pages[0].page, f.buf[0]);
+                        sysmem_get(f.sysmem_ptr, f.cache_pages[0].page, f.buf^[0]);
                         f.buf_count := f.cache_pages[0].buf_count;
                         f.buf_update := f.cache_pages[0].buf_update;
                         f.buf_pos := 0;
@@ -779,12 +808,12 @@ BEGIN
         IF f.buf_update THEN BEGIN
                 ns := f.buf_page * SizeOf(BFILE_BUF) + f.buf_count;
                 IF f.fsize < ns THEN f.fsize := ns;
-                sysmem_put(f.sysmem_ptr, f.buf_page, f.buf);
+                sysmem_put(f.sysmem_ptr, f.buf_page, f.buf^[0]);
                 f.buf_update := FALSE;
         END;
         f.buf_page := new_page;
         f.buf_pos := 0;
-        sysmem_get(f.sysmem_ptr, f.buf_page, f.buf);
+        sysmem_get(f.sysmem_ptr, f.buf_page, f.buf^[0]);
 END;
 
 PROCEDURE FsSwitchPage(VAR f : BFILE; new_page : DWORD);
@@ -798,7 +827,7 @@ BEGIN
         IF f.has_cache THEN PushPageToCache(f);
         IF f.buf_update THEN BEGIN
                 lSeek(f.f, SEEK_BEG, f.buf_page * SizeOf(BFILE_BUF));
-                lWrite(f.f, f.buf, f.buf_count);
+                lWrite(f.f, f.buf^[0], f.buf_count);
                 f.buf_update := FALSE;
         END;
 
@@ -809,7 +838,7 @@ BEGIN
         IF f.has_cache THEN IF GetPageFromCache(f) THEN EXIT;
 
         lSeek(f.f, SEEK_BEG, f.buf_page * SizeOf(BFILE_BUF));
-        f.buf_count := lRead(f.f, f.buf, SizeOf(BFILE_BUF));
+        f.buf_count := lRead(f.f, f.buf^[0], SizeOf(BFILE_BUF));
         IF res <> 0 THEN BEGIN
                 f.ioresult := 100;
         END;
@@ -846,7 +875,7 @@ BEGIN
                         delta := SizeOf(BFILE_BUF);
                 END;
                 IF delta > count THEN delta := count;
-                Move(p[0], f.buf[f.buf_pos], delta);
+                Move(p[0], f.buf^[f.buf_pos], delta);
                 f.buf_update := TRUE;
                 Inc(f.buf_pos, delta);
                 Inc(p, delta);
@@ -877,7 +906,7 @@ BEGIN
                         delta := f.buf_count;
                 END;
                 IF delta > count THEN delta := count;
-                Move(f.buf[f.buf_pos], p[0], delta);
+                Move(f.buf^[f.buf_pos], p[0], delta);
                 Inc(f.buf_pos, delta);
                 Dec(count, delta);
                 Inc(p, delta);
@@ -916,7 +945,10 @@ BEGIN
         IF NOT f.is_open THEN BEGIN
                 f.ioresult := 103;
                 FileSize := 0;
-        END ELSE FileSize := f.fsize;
+        END ELSE BEGIN
+                UpdateFileSize(f);
+                FileSize := f.fsize;
+        END;
 END;
 
 PROCEDURE bubbleSortCachePages(VAR info : SORT_PAGE_INFO; left, right : INTEGER);
@@ -979,9 +1011,9 @@ BEGIN
                 cpage := sort_info[i].old;
                 f.buf_page := f.cache_pages[cpage].buf_page;
                 f.buf_count := f.cache_pages[cpage].buf_count;
-                sysmem_get(f.sysmem_ptr, f.cache_pages[cpage].page, f.buf);
+                sysmem_get(f.sysmem_ptr, f.cache_pages[cpage].page, f.buf^[0]);
                 lSeek(f.f, SEEK_BEG, f.buf_page * SizeOf(BFILE_BUF));
-                lWrite(f.f, f.buf[0], f.buf_count);
+                lWrite(f.f, f.buf^[0], f.buf_count);
                 f.cache_pages[cpage].buf_update := FALSE;
                 Inc(i);
         END;
@@ -995,7 +1027,7 @@ PROCEDURE FsFlush(VAR f : BFILE);
 BEGIN
         IF f.buf_update THEN BEGIN
                 lSeek(f.f, SEEK_BEG, f.buf_page * SizeOf(BFILE_BUF));
-                lWrite(f.f, f.buf, f.buf_count);
+                lWrite(f.f, f.buf^[0], f.buf_count);
                 f.buf_update := FALSE;
         END;
         IF f.has_cache THEN FlushCache(f);
@@ -1033,6 +1065,7 @@ BEGIN
         IF f.filetype = FS_FILE THEN FsClose(f);
 
         IF f.has_cache THEN sysmem_free(f.sysmem_ptr);
+        IF f.buf <> NIL THEN FreeMem(f.buf, SizeOf(BFILE_BUF));
         FillChar(f, SizeOf(BFILE), #0);
 END;
 
@@ -1061,7 +1094,7 @@ BEGIN
         IF NOT f.is_open THEN EXIT;
         WHILE s[0] <> #255 DO BEGIN
                 WHILE f.buf_pos < f.buf_count DO BEGIN
-                        c := f.buf[f.buf_pos];
+                        c := f.buf^[f.buf_pos];
                         Inc(f.buf_pos);
                         IF c <> #$0D THEN BEGIN
                                 IF c = #$0A THEN BREAK;
@@ -1127,10 +1160,18 @@ BEGIN
         IF f.ioresult = 0 THEN f.ioresult := 2 ELSE f.ioresult := 0;
 END;
 
-PROCEDURE BlockCopy (VAR src, dst : BFILE; count : DWORD);
-VAR     delta : WORD;
+FUNCTION BlockCopy (VAR src, dst : BFILE; count : DWORD) : DWORD;
+VAR     delta  : WORD;
+        fp, fs : DWORD;
 BEGIN
-        IF (NOT src.is_open) OR (NOT dst.is_open) THEN EXIT;
+        IF (NOT src.is_open) OR (NOT dst.is_open) THEN BEGIN
+                BlockCopy := 0;
+                EXIT;
+        END;
+        fs := FileSize(src);
+        fp := FilePos(src);
+        IF fp + count > fs THEN count := fs - fp;
+        fp := 0;
         WHILE count <> 0 DO BEGIN
                 delta := src.buf_count - src.buf_pos;
                 IF delta = 0 THEN BEGIN
@@ -1140,11 +1181,13 @@ BEGIN
                         delta := src.buf_count;
                 END;
                 IF delta > count THEN delta := count;
-                BlockWrite(dst, src.buf[src.buf_pos], delta);
+                BlockWrite(dst, src.buf^[src.buf_pos], delta);
                 IF dst.ioresult <> 0 THEN BREAK;
                 Inc(src.buf_pos, delta);
                 Dec(count, delta);
+                Inc(fp, delta);
         END;
+        BlockCopy := fp;
 END;
 
 PROCEDURE SetDefaultCacheSize(i : INTEGER);
@@ -1207,28 +1250,72 @@ BEGIN
         BlockWrite(f, b, SizeOf(b));
 END;
 
-PROCEDURE IncByte(VAR f : BFILE; b : BYTE);
+PROCEDURE IncByte(VAR f : BFILE; ofs : DWORD; b : BYTE);
 VAR     v   : BYTE;
 BEGIN
+        Seek(f, ofs);
         v := ReadByte(f);
-        Seek(f, FilePos(f) - 1);
+        Seek(f, ofs);
         WriteByte(f, v + b);
 END;
 
-PROCEDURE IncWord(VAR f : BFILE; w : WORD);
+PROCEDURE IncWord(VAR f : BFILE; ofs : DWORD; w : WORD);
 VAR     v   : WORD;
 BEGIN
+        Seek(f, ofs);
         v := ReadWord(f);
-        Seek(f, FilePos(f) - 2);
+        Seek(f, ofs);
         WriteWord(f, v + w);
 END;
 
-PROCEDURE IncDWord(VAR f : BFILE; dw : DWORD);
+PROCEDURE IncDWord(VAR f : BFILE; ofs : DWORD; dw : DWORD);
 VAR     v   : DWORD;
 BEGIN
+        Seek(f, ofs);
         v := ReadDWord(f);
-        Seek(f, FilePos(f) - 4);
+        Seek(f, ofs);
         WriteDWord(f, v + dw);
+END;
+
+PROCEDURE SetByte(VAR f : BFILE; ofs : DWORD; b : BYTE);
+BEGIN
+        Seek(f, ofs);
+        WriteByte(f, b);
+END;
+
+PROCEDURE SetWord(VAR f : BFILE; ofs : DWORD; w : WORD);
+BEGIN
+        Seek(f, ofs);
+        WriteWord(f, w);
+END;
+
+PROCEDURE SegDWord(VAR f : BFILE; ofs : DWORD; dw : DWORD);
+BEGIN
+        Seek(f, ofs);
+        WriteDWord(f, dw);
+END;
+
+FUNCTION GetByte(VAR f : BFILE; ofs : DWORD) : BYTE;
+BEGIN
+        Seek(f, ofs);
+        GetByte := ReadByte(f);
+END;
+
+FUNCTION GetWord(VAR f : BFILE; ofs : DWORD) : WORD;
+BEGIN
+        Seek(f, ofs);
+        GetWord := ReadWord(f);
+END;
+
+FUNCTION GetDWord(VAR f : BFILE; ofs : DWORD) : DWORD;
+BEGIN
+        Seek(f, ofs);
+        GetDWord := ReadDWord(f);
+END;
+
+PROCEDURE SetDeleteOnClose(VAR f : BFILE; flag : BOOLEAN);
+BEGIN
+        IF f.is_open AND (f.filetype = FS_FILE) THEN f.delonclose := flag;
 END;
 
 {
