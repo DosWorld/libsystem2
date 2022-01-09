@@ -1,4 +1,4 @@
-# System2 library for Trubo Pascal (MS-DOS)
+# System2 library for Turbo Pascal (MS-DOS)
 
   This units is designed to replace some functions from system unit.
 
