@@ -34,7 +34,8 @@ UNIT System2;
   2. Buffered I/O (DOS memory, 16K per file)
   3. Buffered I/O (EMS and XMS memory, up to 512 KB per file)
   4. File in memory (EMS, XMS) up to 64 MB each.
-  5. Quoted command-line parameters
+  5. Temporary files.
+  6. Quoted command-line parameters
 
   NOTE about 16K: This value became from EMS-page size,
   so please dont change it.
@@ -95,6 +96,8 @@ PROCEDURE ReWriteMemFile (VAR f : BFILE; size : DWORD);
 
 FUNCTION Eof (VAR f : BFILE) : BOOLEAN;
 PROCEDURE Flush (VAR f : BFILE);
+
+{ Set flag - delete file, when close }
 PROCEDURE SetDeleteOnClose(VAR f : BFILE; flag : BOOLEAN);
 PROCEDURE Close (VAR f : BFILE);
 FUNCTION IsOpen(VAR f : BFILE):BOOLEAN;
@@ -128,6 +131,7 @@ FUNCTION BlockCopy (VAR src, dst : BFILE; count : DWORD) : DWORD;
 
 PROCEDURE Seek (VAR f : BFILE; pos : DWORD);
 FUNCTION FilePos (VAR f : BFILE) : DWORD;
+PROCEDURE FilePosAlign (VAR f : BFILE; align : WORD);
 FUNCTION FileSize (VAR f : BFILE) : DWORD;
 PROCEDURE Truncate (VAR f : BFILE);
 
@@ -144,7 +148,11 @@ PROCEDURE WriteLnErr (s : STRING);
 FUNCTION ParamCount : INTEGER;
 FUNCTION ParamStr(i : INTEGER) : STRING;
 
+{ Set default cache size in 16k pages, for new open file calls }
 PROCEDURE SetDefaultCacheSize(i : INTEGER);
+
+{ Enable/disable using temp files, if cant create in-memory file}
+PROCEDURE SetUseTempFiles(status : BOOLEAN);
 
 IMPLEMENTATION
 
@@ -178,6 +186,7 @@ VAR     fname              : STRING;
         res                : WORD;
         prevExitProc       : POINTER;
         default_cache_size : WORD;
+        use_temp           : BOOLEAN;
 
 FUNCTION IsOpen(VAR f : BFILE):BOOLEAN;
 BEGIN
@@ -709,6 +718,7 @@ BEGIN
                 f.filename := 'MEM:FILE' + s + '.TMP';
         END;
         IF NOT f.is_open THEN BEGIN FreeMem(f.buf, SizeOf(BFILE_BUF)); f.buf := NIL; END;
+        IF use_temp THEN ReWriteTemp(f);
 END;
 
 PROCEDURE UpdateFileSize(VAR f : BFILE);
@@ -948,6 +958,38 @@ BEGIN
         END ELSE BEGIN
                 UpdateFileSize(f);
                 FileSize := f.fsize;
+        END;
+END;
+
+PROCEDURE FilePosAlign (VAR f : BFILE; align : WORD);
+VAR     fpos  : DWORD;
+        npos  : DWORD;
+        fsize : DWORD;
+        m     : WORD;
+        buf   : STRING;
+BEGIN
+        fpos := FilePos(f);
+        npos := fpos DIV align;
+        m := fpos MOD align;
+        IF m = 0 THEN EXIT;
+        Inc(npos);
+        npos := npos * align;
+        fsize := FileSize(f);
+        IF fsize >= npos THEN BEGIN Seek(f, npos); EXIT; END;
+        IF fpos <> fsize THEN BEGIN
+                Seek(f, fsize);
+                m := fsize MOD align;
+        END;
+        FillChar(buf[0], 256, #0);
+        m := align - m;
+        WHILE m <> 0 DO BEGIN
+                IF m > 256 THEN BEGIN
+                        BlockWrite(f, buf[0], 256);
+                        Dec(m, 256);
+                END ELSE BEGIN
+                        BlockWrite(f, buf[0], m);
+                        m := 0;
+                END;
         END;
 END;
 
@@ -1318,6 +1360,11 @@ BEGIN
         IF f.is_open AND (f.filetype = FS_FILE) THEN f.delonclose := flag;
 END;
 
+PROCEDURE SetUseTempFiles(status : BOOLEAN);
+BEGIN
+        use_temp := status;
+END;
+
 {
 PROCEDURE MyExitProc;FAR;
 BEGIN
@@ -1327,6 +1374,7 @@ END;
 
 BEGIN
         default_cache_size := 8;
+        use_temp := TRUE;
         Randomize;
 {
         prevExitProc := exitProc;
