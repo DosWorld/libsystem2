@@ -78,6 +78,7 @@ ASM
         MOV  CX, size
         XOR  SI,SI
         MOV  AX, $1703
+        MOV  DX, 1
         INT  $2F
         POP  ES
 END;
