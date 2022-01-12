@@ -946,6 +946,7 @@ BEGIN
                         SwitchPage(f, f.buf_page + 1);
                         IF f.ioresult <> 0 THEN BREAK;
                         f.buf_pos := 0;
+                        IF f.buf_count = 0 THEN BREAK;
                         delta := f.buf_count;
                 END;
                 IF delta > count THEN delta := count;
