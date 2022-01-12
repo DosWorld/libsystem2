@@ -21,9 +21,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 }
 {$A+,I-,S-,R-,D-,L-,Q-,F-,G-,O-,B-}
-
 UNIT System2;
-
 { =========================================================================
   Hi !
 
@@ -31,30 +29,35 @@ UNIT System2;
   It has support for:
 
   1. Long file names
-  2. Buffered I/O (DOS memory, 16K per file)
-  3. Buffered I/O (EMS and XMS memory, up to 512 KB per file)
-  4. File in memory (EMS, XMS) up to 64 MB each.
+  2. Buffered I/O (DOS memory, 16K per file).
+  3. Buffered I/O (EMS/XMS), up to 512 KB per file.
+  4. File in memory (EMS/XMS) up to 4G each.
   5. Temporary files.
-  6. Quoted command-line parameters
+  6. Quoted command-line parameters.
 
   NOTE about 16K: This value became from EMS-page size,
   so please dont change it.
 
   ========================================================================= }
-
 INTERFACE
 
-CONST
+{$DEFINE SYSMEM}
+{$IFDEF DPMI}
+{$UNDEF SYSMEM}
+{$ENDIF}
+{$IFDEF WINDOWS}
+{$UNDEF SYSMEM}
+{$ENDIF}
 
-CACHE_PAGES_PER_FILE = 32; { 512KB = 32*16K }
+CONST CACHE_PAGES_PER_FILE = 32; { 512KB = 32*16K }
 
 TYPE
 
-TFILETYPE = (FS_FILE, MEM_FILE);
-
+TFILETYPE = (FS_FILE {$IFDEF SYSMEM}, MEM_FILE{$ENDIF} );
 DWORD = LONGINT;
 BFILE_BUF = ARRAY[0..16383] OF CHAR;
 
+{$IFDEF SYSMEM}
 TCACHE_PAGE = RECORD
         page       : WORD;
         notempty   : BOOLEAN;
@@ -62,6 +65,7 @@ TCACHE_PAGE = RECORD
         buf_page   : DWORD;
         buf_count  : WORD;
 END;
+{$ENDIF}
 
 BFILE = RECORD
         f           : WORD;
@@ -75,10 +79,12 @@ BFILE = RECORD
         buf_count   : WORD;
         buf_pos     : WORD;
         fsize       : DWORD;
+{$IFDEF SYSMEM}
         has_cache   : BOOLEAN;
         cache_size  : WORD;
         cache_pages : ARRAY[0 .. CACHE_PAGES_PER_FILE-1] OF TCACHE_PAGE;
         sysmem_ptr  : POINTER;
+{$ENDIF}
         delonclose  : BOOLEAN;
 END;
 
@@ -92,7 +98,7 @@ PROCEDURE ReWriteTemp (VAR f : BFILE);
 
 { ReWriteMemFile does not requre call to Assign.
   size - amount of 16K pages }
-PROCEDURE ReWriteMemFile (VAR f : BFILE; size : DWORD);
+PROCEDURE ReWriteMemFile (VAR f : BFILE);
 
 FUNCTION Eof (VAR f : BFILE) : BOOLEAN;
 PROCEDURE Flush (VAR f : BFILE);
@@ -108,33 +114,32 @@ FUNCTION ReadDWord(VAR f : BFILE) : DWORD;
 PROCEDURE ReadLn (VAR f : BFILE; VAR s : STRING);
 FUNCTION BlockRead (VAR f : BFILE; VAR d; count : WORD) : WORD;
 
-FUNCTION GetByte(VAR f : BFILE; ofs : DWORD) : BYTE;
-FUNCTION GetWord(VAR f : BFILE; ofs : DWORD) : WORD;
-FUNCTION GetDWord(VAR f : BFILE; ofs : DWORD) : DWORD;
-
 PROCEDURE WriteByte(VAR f : BFILE; b : BYTE);
 PROCEDURE WriteWord(VAR f : BFILE; w : WORD);
 PROCEDURE WriteDWord(VAR f : BFILE; dw : DWORD);
 PROCEDURE Write (VAR f : BFILE; s : STRING);
 PROCEDURE WriteLn (VAR f : BFILE; s : STRING);
 PROCEDURE BlockWrite (VAR f : BFILE; VAR d; count : WORD);
-
-PROCEDURE IncByte(VAR f : BFILE; ofs : DWORD; b : BYTE);
-PROCEDURE IncWord(VAR f : BFILE; ofs : DWORD; w : WORD);
-PROCEDURE IncDWord(VAR f : BFILE; ofs : DWORD; dw : DWORD);
-
-PROCEDURE SetByte(VAR f : BFILE; ofs : DWORD; b : BYTE);
-PROCEDURE SetWord(VAR f : BFILE; ofs : DWORD; w : WORD);
-PROCEDURE SegDWord(VAR f : BFILE; ofs : DWORD; dw : DWORD);
-
 FUNCTION BlockCopy (VAR src, dst : BFILE; count : DWORD) : DWORD;
-
 PROCEDURE Seek (VAR f : BFILE; pos : DWORD);
 FUNCTION FilePos (VAR f : BFILE) : DWORD;
 PROCEDURE FilePosAlign (VAR f : BFILE; align : WORD);
 FUNCTION FileSize (VAR f : BFILE) : DWORD;
 PROCEDURE Truncate (VAR f : BFILE);
-
+{ random access }
+FUNCTION GetByte(VAR f : BFILE; ofs : DWORD) : BYTE;
+FUNCTION GetWord(VAR f : BFILE; ofs : DWORD) : WORD;
+FUNCTION GetDWord(VAR f : BFILE; ofs : DWORD) : DWORD;
+PROCEDURE SetByte(VAR f : BFILE; ofs : DWORD; b : BYTE);
+PROCEDURE SetWord(VAR f : BFILE; ofs : DWORD; w : WORD);
+PROCEDURE SetDWord(VAR f : BFILE; ofs : DWORD; dw : DWORD);
+PROCEDURE IncByte(VAR f : BFILE; ofs : DWORD; b : BYTE);
+PROCEDURE IncWord(VAR f : BFILE; ofs : DWORD; w : WORD);
+PROCEDURE IncDWord(VAR f : BFILE; ofs : DWORD; dw : DWORD);
+PROCEDURE DecByte(VAR f : BFILE; ofs : DWORD; b : BYTE);
+PROCEDURE DecWord(VAR f : BFILE; ofs : DWORD; w : WORD);
+PROCEDURE DecDWord(VAR f : BFILE; ofs : DWORD; dw : DWORD);
+{ }
 PROCEDURE Erase (VAR f : BFILE);
 PROCEDURE Rename (VAR f : BFILE; newName : STRING);
 PROCEDURE GetDir(d : BYTE; VAR s : STRING);
@@ -154,9 +159,15 @@ PROCEDURE SetDefaultCacheSize(i : INTEGER);
 { Enable/disable using temp files, if cant create in-memory file}
 PROCEDURE SetUseTempFiles(status : BOOLEAN);
 
+FUNCTION FileExists(s : STRING):BOOLEAN;
+PROCEDURE FileDelete(s : STRING);
+
+FUNCTION getCurrentDisk : BYTE;
+PROCEDURE setCurrentDisk(disk : BYTE);
+
 IMPLEMENTATION
 
-USES SysMem, Dos;
+USES {$IFDEF SYSMEM}SysMem,{$ENDIF}Dos;
 
 CONST
 
@@ -167,7 +178,7 @@ SEEK_CUR = 1;
 SEEK_END = 2;
 
 LN_STR : STRING[2] = #$0D + #$0A;
-
+use_temp : BOOLEAN = FALSE;
 SELFNAME : PCHAR = NIL;
 
 TYPE
@@ -175,19 +186,21 @@ TYPE
 PSTRING = ^STRING;
 PWORD   = ^WORD;
 
+{$IFDEF SYSMEM}
 SORT_PAGE = RECORD
         old        : WORD;
         buf_page   : DWORD;
 END;
 SORT_PAGE_INFO = ARRAY[0 .. CACHE_PAGES_PER_FILE-1] OF SORT_PAGE;
+{$ENDIF}
 
 VAR     fname              : STRING;
         fname2             : STRING;
         res                : WORD;
         prevExitProc       : POINTER;
+{$IFDEF SYSMEM}
         default_cache_size : WORD;
-        use_temp           : BOOLEAN;
-
+{$ENDIF}
 FUNCTION IsOpen(VAR f : BFILE):BOOLEAN;
 BEGIN
         IsOpen := f.is_open;
@@ -495,7 +508,7 @@ BEGIN
                 POP  DS
                 MOV  res, AX
         END;
-        IF res = 0 THEN BEGIN
+        IF res <> 0 THEN BEGIN
                 WHILE s[0] <> #255 DO BEGIN
                         IF s[ORD(s[0])+1] = #0 THEN BREAK;
                         Inc(s[0]);
@@ -594,6 +607,7 @@ BEGIN
         ParamStr := r;
 END;
 
+{$IFDEF SYSMEM}
 PROCEDURE InitCache(VAR f : BFILE);
 VAR     i : INTEGER;
 BEGIN
@@ -602,7 +616,7 @@ BEGIN
         f.has_cache := FALSE;
         FillChar(f.cache_pages, SizeOf(f.cache_pages), #0);
         IF (NOT f.is_open) OR (f.cache_size = 0) THEN EXIT;
-        f.sysmem_ptr := sysmem_alloc(f.cache_size);
+        f.sysmem_ptr := sysmem_alloc;
         f.has_cache := f.sysmem_ptr <> NIL;
         IF f.has_cache THEN BEGIN
                 i := 0;
@@ -612,6 +626,7 @@ BEGIN
                 END;
         END;
 END;
+{$ENDIF}
 
 PROCEDURE Assign(VAR f : BFILE; fname : STRING);
 BEGIN
@@ -637,7 +652,9 @@ BEGIN
         f.fsize := 0;
         f.delonclose := FALSE;
         f.filetype := FS_FILE;
+{$IFDEF SYSMEM}
         InitCache(f);
+{$ENDIF}
         IF NOT f.is_open THEN BEGIN FreeMem(f.buf, SizeOf(BFILE_BUF)); f.buf := NIL; END;
 END;
 
@@ -656,24 +673,28 @@ BEGIN
         f.buf_page := 0;
         f.buf_update := FALSE;
         f.delonclose := FALSE;
+{$IFDEF SYSMEM}
         f.cache_size := 0;
-        f.filetype := FS_FILE;
         f.sysmem_ptr := NIL;
+{$ENDIF}
+        f.filetype := FS_FILE;
         IF f.is_open THEN BEGIN
                 lSeek(f.f, SEEK_END, 0);
                 f.fsize := lTell(f.f);
                 lSeek(f.f, SEEK_BEG, 0);
                 f.buf_count := lRead(f.f, f.buf^[0], SizeOf(BFILE_BUF));
                 if res <> 0 THEN f.ioresult := 100;
+{$IFDEF SYSMEM}
+                InitCache(f);
+{$ENDIF}
         END;
-        InitCache(f);
         IF NOT f.is_open THEN BEGIN FreeMem(f.buf, SizeOf(BFILE_BUF)); f.buf := NIL; END;
 END;
 
 PROCEDURE Append (VAR f : BFILE);
 BEGIN
         Reset(f);
-        IF f.is_open THEN Seek(f, FileSize(f));
+        IF f.is_open THEN Seek(f, FileSize(f)) ELSE ReWrite(f);
 END;
 
 PROCEDURE ReWriteTemp(VAR f : BFILE);
@@ -700,16 +721,14 @@ BEGIN
         SetDeleteOnClose(f, TRUE);
 END;
 
-PROCEDURE ReWriteMemFile(VAR f : BFILE; size : DWORD);
+PROCEDURE ReWriteMemFile(VAR f : BFILE);
+{$IFDEF SYSMEM}
 VAR     s             : STRING;
-        size_in_pages : WORD;
 BEGIN
-        size_in_pages := (size SHR 14) AND $FFFF;
-        IF (size AND $3FFF) <> 0 THEN Inc(size_in_pages);
         FillChar(f, SizeOf(BFILE), #0);
         GetMem(f.buf, SizeOf(BFILE_BUF));
         IF f.buf = NIL THEN EXIT;
-        f.sysmem_ptr := sysmem_alloc(size_in_pages);
+        f.sysmem_ptr := sysmem_alloc;
         f.is_open := f.sysmem_ptr <> NIL;
         f.has_cache := f.sysmem_ptr <> NIL;
         IF f.is_open THEN BEGIN
@@ -720,6 +739,12 @@ BEGIN
         IF NOT f.is_open THEN BEGIN FreeMem(f.buf, SizeOf(BFILE_BUF)); f.buf := NIL; END;
         IF use_temp THEN ReWriteTemp(f);
 END;
+{$ENDIF}
+{$IFNDEF SYSMEM}
+BEGIN
+        ReWriteTemp(f);
+END;
+{$ENDIF}
 
 PROCEDURE UpdateFileSize(VAR f : BFILE);
 VAR     ns : DWORD;
@@ -739,6 +764,7 @@ BEGIN
         Eof := (f.buf_page * SizeOf(BFILE_BUF) + f.buf_pos) = f.fsize;
 END;
 
+{$IFDEF SYSMEM}
 PROCEDURE MakeCachedPageTop(VAR f : BFILE; pgnum : WORD);
 VAR     tmp : TCACHE_PAGE;
         i   : WORD;
@@ -825,6 +851,7 @@ BEGIN
         f.buf_pos := 0;
         sysmem_get(f.sysmem_ptr, f.buf_page, f.buf^[0]);
 END;
+{$ENDIF}
 
 PROCEDURE FsSwitchPage(VAR f : BFILE; new_page : DWORD);
 VAR     ns        : DWORD;
@@ -833,8 +860,9 @@ BEGIN
                 ns := f.buf_page * SizeOf(BFILE_BUF) + f.buf_count;
                 IF f.fsize < ns THEN f.fsize := ns;
         END;
-
+{$IFDEF SYSMEM}
         IF f.has_cache THEN PushPageToCache(f);
+{$ENDIF}
         IF f.buf_update THEN BEGIN
                 lSeek(f.f, SEEK_BEG, f.buf_page * SizeOf(BFILE_BUF));
                 lWrite(f.f, f.buf^[0], f.buf_count);
@@ -845,8 +873,9 @@ BEGIN
         f.buf_pos := 0;
         f.buf_update := FALSE;
 
+{$IFDEF SYSMEM}
         IF f.has_cache THEN IF GetPageFromCache(f) THEN EXIT;
-
+{$ENDIF}
         lSeek(f.f, SEEK_BEG, f.buf_page * SizeOf(BFILE_BUF));
         f.buf_count := lRead(f.f, f.buf^[0], SizeOf(BFILE_BUF));
         IF res <> 0 THEN BEGIN
@@ -860,9 +889,13 @@ BEGIN
         f.ioresult := 0;
 
         IF f.buf_page = new_page THEN EXIT;
-
+{$IFDEF SYSMEM}
         IF f.filetype = FS_FILE THEN FsSwitchPage(f, new_page)
         ELSE IF f.filetype = MEM_FILE THEN MemFileSwitchPage(f, new_page);
+{$ENDIF}
+{$IFNDEF SYSMEM}
+        FsSwitchPage(f, new_page);
+{$ENDIF}
 END;
 
 PROCEDURE BlockWrite(VAR f : BFILE; VAR d; count : WORD);
@@ -993,6 +1026,7 @@ BEGIN
         END;
 END;
 
+{$IFDEF SYSMEM}
 PROCEDURE bubbleSortCachePages(VAR info : SORT_PAGE_INFO; left, right : INTEGER);
 VAR     i, j : INTEGER;
         temp : SORT_PAGE;
@@ -1060,20 +1094,7 @@ BEGIN
                 Inc(i);
         END;
 END;
-
-PROCEDURE MemFileFlush(VAR f : BFILE);
-BEGIN
-END;
-
-PROCEDURE FsFlush(VAR f : BFILE);
-BEGIN
-        IF f.buf_update THEN BEGIN
-                lSeek(f.f, SEEK_BEG, f.buf_page * SizeOf(BFILE_BUF));
-                lWrite(f.f, f.buf^[0], f.buf_count);
-                f.buf_update := FALSE;
-        END;
-        IF f.has_cache THEN FlushCache(f);
-END;
+{$ENDIF}
 
 PROCEDURE Flush(VAR f : BFILE);
 BEGIN
@@ -1081,8 +1102,16 @@ BEGIN
         res := 0;
         f.ioresult := 0;
 
-        IF f.filetype = FS_FILE THEN FsFlush(f)
-        ELSE IF f.filetype = MEM_FILE THEN MemFileFlush(f);
+        IF f.filetype = FS_FILE THEN BEGIN
+                IF f.buf_update THEN BEGIN
+                        lSeek(f.f, SEEK_BEG, f.buf_page * SizeOf(BFILE_BUF));
+                        lWrite(f.f, f.buf^[0], f.buf_count);
+                        f.buf_update := FALSE;
+                END;
+{$IFDEF SYSMEM}
+                IF f.has_cache THEN FlushCache(f);
+{$ENDIF}
+        END;
 END;
 
 PROCEDURE FsClose(VAR f : BFILE);
@@ -1093,7 +1122,6 @@ BEGIN
         f.buf_pos := 0;
         f.buf_page := 0;
         f.fsize := 0;
-        f.sysmem_ptr := NIL;
         IF f.delonclose THEN Erase(f);
 END;
 
@@ -1106,7 +1134,9 @@ BEGIN
         IF NOT f.delonclose THEN Flush(f);
         IF f.filetype = FS_FILE THEN FsClose(f);
 
+{$IFDEF SYSMEM}
         IF f.has_cache THEN sysmem_free(f.sysmem_ptr);
+{$ENDIF}
         IF f.buf <> NIL THEN FreeMem(f.buf, SizeOf(BFILE_BUF));
         FillChar(f, SizeOf(BFILE), #0);
 END;
@@ -1167,6 +1197,7 @@ BEGIN
         res := 0;
         lSeek(f.f, SEEK_BEG, f.fsize);
         lTruncate(f.f);
+{$IFDEF SYSMEM}
         IF f.has_cache THEN BEGIN
                 i := 0;
                 WHILE i < f.cache_size DO BEGIN
@@ -1175,6 +1206,7 @@ BEGIN
                         Inc(i);
                 END;
         END;
+{$ENDIF}
         f.ioresult := res;
         IF f.ioresult <> 0 THEN BEGIN
                 f.ioresult := 101;
@@ -1189,8 +1221,13 @@ BEGIN
                 EXIT;
         END;
         f.ioresult := 0;
+{$IFDEF SYSMEM}
         IF f.filetype = FS_FILE THEN FsTruncate(f)
         ELSE IF f.filetype = MEM_FILE THEN MemFileTruncate(f);
+{$ENDIF}
+{$IFNDEF SYSMEM}
+        IF f.filetype = FS_FILE THEN FsTruncate(f)
+{$ENDIF}
 END;
 
 PROCEDURE Erase (VAR f : BFILE);
@@ -1234,9 +1271,11 @@ END;
 
 PROCEDURE SetDefaultCacheSize(i : INTEGER);
 BEGIN
+{$IFDEF SYSMEM}
         IF i < 0 THEN i := 0; { disable cache }
         IF i > CACHE_PAGES_PER_FILE THEN i := CACHE_PAGES_PER_FILE;
         default_cache_size := i;
+{$ENDIF}
 END;
 
 FUNCTION ReadByte(VAR f : BFILE) : BYTE;
@@ -1319,6 +1358,33 @@ BEGIN
         WriteDWord(f, v + dw);
 END;
 
+PROCEDURE DecByte(VAR f : BFILE; ofs : DWORD; b : BYTE);
+VAR     v   : BYTE;
+BEGIN
+        Seek(f, ofs);
+        v := ReadByte(f);
+        Seek(f, ofs);
+        WriteByte(f, v - b);
+END;
+
+PROCEDURE DecWord(VAR f : BFILE; ofs : DWORD; w : WORD);
+VAR     v   : WORD;
+BEGIN
+        Seek(f, ofs);
+        v := ReadWord(f);
+        Seek(f, ofs);
+        WriteWord(f, v - w);
+END;
+
+PROCEDURE DecDWord(VAR f : BFILE; ofs : DWORD; dw : DWORD);
+VAR     v   : DWORD;
+BEGIN
+        Seek(f, ofs);
+        v := ReadDWord(f);
+        Seek(f, ofs);
+        WriteDWord(f, v - dw);
+END;
+
 PROCEDURE SetByte(VAR f : BFILE; ofs : DWORD; b : BYTE);
 BEGIN
         Seek(f, ofs);
@@ -1331,7 +1397,7 @@ BEGIN
         WriteWord(f, w);
 END;
 
-PROCEDURE SegDWord(VAR f : BFILE; ofs : DWORD; dw : DWORD);
+PROCEDURE SetDWord(VAR f : BFILE; ofs : DWORD; dw : DWORD);
 BEGIN
         Seek(f, ofs);
         WriteDWord(f, dw);
@@ -1365,6 +1431,34 @@ BEGIN
         use_temp := status;
 END;
 
+FUNCTION FileExists(s : STRING):BOOLEAN;
+VAR h : WORD;
+BEGIN
+        fname := s + #0;
+        h := lReset;
+        IF h <> 0 THEN lclose(h);
+        FileExists := h <> 0;
+END;
+
+PROCEDURE FileDelete(s : STRING);
+BEGIN
+        fname := s + #0;
+        lErase;
+END;
+
+FUNCTION getCurrentDisk : BYTE;ASSEMBLER;
+ASM
+        MOV  AH, $19
+        INT  $21
+END;
+
+PROCEDURE setCurrentDisk(disk : BYTE);ASSEMBLER;
+ASM
+        MOV  AH, $0e
+        MOV  DL, disk
+        INT  $21
+END;
+
 {
 PROCEDURE MyExitProc;FAR;
 BEGIN
@@ -1373,8 +1467,10 @@ END;
 }
 
 BEGIN
-        default_cache_size := 8;
-        use_temp := TRUE;
+{$IFDEF SYSMEM}
+        IF CACHE_PAGES_PER_FILE > 8 THEN default_cache_size := 8
+        ELSE default_cache_size := CACHE_PAGES_PER_FILE;
+{$ENDIF
         Randomize;
 {
         prevExitProc := exitProc;

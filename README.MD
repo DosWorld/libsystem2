@@ -13,7 +13,10 @@
   NOTE about 16K: This value became from EMS-page size,
   so please dont change it.
 
+#  WinCB
+
+  Unit for Windows Clipboard support for MS-DOS applications.
+
 # License
 
 MIT License
-

@@ -26,19 +26,32 @@ UNIT SysXms;
 
 INTERFACE
 
-CONST
-
-XMS_PAGE_SIZE  = 16*1024;
+CONST   XMS_PAGE_SIZE  = 16*1024;
 
 TYPE
 XMS_COPY_DIRECTION = (DOS2XMS, XMS2DOS);
 
 FUNCTION xms_check_driver : BOOLEAN;
+FUNCTION xms_maxavail : WORD;
 FUNCTION xms_malloc(pages : WORD) : WORD;
+FUNCTION xms_realloc(handle : WORD; old_page_count, new_page_count : WORD) : WORD;
 PROCEDURE xms_copy(handle : WORD; page : WORD; VAR buf; dir : XMS_COPY_DIRECTION);
 PROCEDURE xms_free(handle : WORD);
 
 IMPLEMENTATION
+
+{$IFDEF DPMI}
+This unit could be used only with real-mode DOS !
+{$ENDIF}
+{$IFDEF WINDOWS}
+This unit could be used only with real-mode DOS !
+{$ENDIF}
+{$IFDEF LINUX}
+This unit could be used only with real-mode DOS !
+{$ENDIF}
+{$IFDEF OS2}
+This unit could be used only with real-mode DOS !
+{$ENDIF}
 
 TYPE
 XMSCOPYREC = RECORD
@@ -49,18 +62,17 @@ XMSCOPYREC = RECORD
         dst_ofs : LONGINT;
 END;
 
-VAR
-xmshandler : POINTER;
-copyrec    : XMSCOPYREC;
+VAR     xmshandler : POINTER;
+        copyrec    : XMSCOPYREC;
 
 FUNCTION xms_check_driver : BOOLEAN;ASSEMBLER;
 ASM
         MOV  AX,$4300
         INT  $2F
         CMP  AL, $80
-        JE   @present
+        JE   @ok
         XOR  AL, AL
-@present:
+@ok:
 END;
 
 FUNCTION xms_get_handler : POINTER;ASSEMBLER;
@@ -82,9 +94,9 @@ ASM
         MOV  AH, 9
         CALL [xmshandler]
         OR   AX, AX
-        JNZ  @end
+        JNZ  @ok
         XOR  DX, DX
-@end:
+@ok:
         MOV  AX, DX
 END;
 
@@ -123,6 +135,47 @@ BEGIN
                         CALL [xmshandler]
                 END;
         END;
+END;
+
+FUNCTION _realloc(handle : WORD; pcount : WORD) : BOOLEAN; ASSEMBLER;
+ASM
+        MOV  AX, pcount
+        MOV  CL, 4
+        SHL  AX, CL
+        MOV  BX, AX
+        MOV  DX, handle
+        MOV  AH, $0F
+        CALL [xmshandler]
+END;
+
+FUNCTION xms_realloc(handle : WORD; old_page_count, new_page_count : WORD) : WORD;
+VAR     h : WORD;
+BEGIN
+        IF _realloc(handle, new_page_count) THEN h := handle
+        ELSE BEGIN
+                h := xms_malloc(new_page_count);
+                IF h <> 0 THEN BEGIN
+                        FillChar(copyrec, SizeOf(copyrec), #0);
+                        copyrec.src_hnd := handle;
+                        copyrec.dst_hnd := h;
+                        copyrec.len := old_page_count * XMS_PAGE_SIZE;
+                        ASM
+                                MOV  SI, offset copyrec
+                                MOV  AH, $0B
+                                CALL [xmshandler]
+                        END;
+                        xms_free(handle);
+                END;
+        END;
+        xms_realloc := h;
+END;
+
+FUNCTION xms_maxavail : WORD;ASSEMBLER;
+ASM
+        MOV  AH, 8
+        CALL [xmshandler]
+        MOV  CL, 4
+        SHR  AX, CL
 END;
 
 BEGIN

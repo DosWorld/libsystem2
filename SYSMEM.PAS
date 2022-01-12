@@ -26,128 +26,159 @@ UNIT SysMem;
 
 INTERFACE
 
-CONST
+CONST   EXTMEM_BLOCK_SIZE = 16 * 1024;
 
-EXTMEM_BLOCK_SIZE = 16 * 1024;
+TYPE
+DWORD = LONGINT;
 
 FUNCTION sysmem_avail : BOOLEAN;
-FUNCTION sysmem_alloc(blk_count : WORD) : POINTER;
-FUNCTION sysmem_put(h : POINTER; blk_num : WORD; VAR blk) : BOOLEAN;
-FUNCTION sysmem_get(h : POINTER; blk_num : WORD; VAR blk) : BOOLEAN;
-PROCEDURE sysmem_free(h : POINTER);
+FUNCTION sysmem_alloc : POINTER;
+FUNCTION sysmem_put(p : POINTER; blk_num : DWORD; VAR blk) : BOOLEAN;
+FUNCTION sysmem_get(p : POINTER; blk_num : DWORD; VAR blk) : BOOLEAN;
+FUNCTION sysmem_truncate(p : POINTER; blk_num : DWORD) : BOOLEAN;
+PROCEDURE sysmem_free(p : POINTER);
 
 IMPLEMENTATION
+
+{$IFDEF DPMI}
+This unit could be used only with real-mode DOS !
+{$ENDIF}
+{$IFDEF WINDOWS}
+This unit could be used only with real-mode DOS !
+{$ENDIF}
+{$IFDEF LINUX}
+This unit could be used only with real-mode DOS !
+{$ENDIF}
+{$IFDEF OS2}
+This unit could be used only with real-mode DOS !
+{$ENDIF}
 
 USES SysEms, SysXms;
 
 TYPE
+TMEMTYPE = (MT_NONE, MT_EMS, MT_XMS);
 
-DWORD = LONGINT;
-
-TMEMTYPE    = (MT_NONE, MT_EMS, MT_XMS);
+TSYSMEMHNDL = RECORD
+        hndl  : WORD;
+        pages : WORD;
+END;
 
 PSYSMEM_REC = ^TSYSMEM_REC;
 TSYSMEM_REC = RECORD
-        ems_h : WORD;
-        xms_h : WORD;
-        size  : WORD;
+        size        : DWORD;
+        hndls       : ARRAY[1..64] OF TSYSMEMHNDL; { 64MB * 64 = 4G }
+        hndls_count : INTEGER;
 END;
 
-VAR
+CONST
+ems_installed : BOOLEAN = FALSE;
+xms_installed : BOOLEAN = FALSE;
+memtype       : TMEMTYPE = MT_NONE;
 
-ems_installed : BOOLEAN;
-ems_window    : PCHAR;
-ems_winnum    : WORD;
-ems_windows   : ARRAY[0..3] OF WORD;
-xms_installed : BOOLEAN;
-memtype       : TMEMTYPE;
-
-FUNCTION ems_alloc(VAR he : TSYSMEM_REC; blk_count : WORD) : BOOLEAN;
+FUNCTION Realloc(VAR he : TSYSMEM_REC; blk_count : DWORD) : BOOLEAN;
+VAR     nw, w, h, p     : WORD;
+        maxavail        : WORD;
+        i               : INTEGER;
+        new_hndls_count : INTEGER;
 BEGIN
-        he.ems_h := sysems.ems_malloc(blk_count);
-        ems_alloc := he.ems_h <> 0;
-END;
-
-FUNCTION xms_alloc(VAR he : TSYSMEM_REC; blk_count : WORD) : BOOLEAN;
-BEGIN
-        he.xms_h := sysxms.xms_malloc(blk_count);
-        xms_alloc := he.xms_h <> 0;
-END;
-
-FUNCTION ems_get_win(h : WORD) : WORD;
-VAR     i : WORD;
-BEGIN
-        i := 0;
-        WHILE i < 4 DO BEGIN
-                IF ems_windows[i] = h THEN BEGIN
-                        BREAK;
+        IF he.size = blk_count THEN EXIT;
+        IF he.size > blk_count THEN BEGIN
+                new_hndls_count := 0;
+                he.size := 0;
+                FOR i := 1 TO he.hndls_count DO BEGIN
+                        h := he.hndls[i].hndl;
+                        p := he.hndls[i].pages;
+                        IF blk_count >= p THEN
+                                Dec(blk_count, p)
+                        ELSE IF blk_count = 0 THEN BEGIN
+                                IF memtype = MT_XMS THEN xms_free(h)
+                                ELSE IF memtype = MT_EMS THEN ems_free(h);
+                                he.hndls[i].hndl := 0;
+                                he.hndls[i].pages := 0;
+                                p := 0;
+                        END ELSE IF blk_count < p THEN BEGIN
+                                IF memtype = MT_XMS THEN
+                                        h := xms_realloc(h, p, blk_count)
+                                ELSE IF memtype = MT_EMS THEN
+                                        h := ems_realloc(h, p, blk_count);
+                                IF h <> 0 THEN BEGIN
+                                        he.hndls[i].hndl := h;
+                                        he.hndls[i].pages := blk_count;
+                                        new_hndls_count := i;
+                                        p := blk_count;
+                                        blk_count := 0;
+                                END;
+                        END;
+                        Inc(he.size, p);
                 END;
-                Inc(i);
-        END;
-        IF i = 4 THEN BEGIN
-                i := ems_winnum;
-                ems_windows[i] := h;
-                ems_winnum := (ems_winnum + 1) AND 3;
-        END;
-        ems_get_win := i;
-END;
-
-FUNCTION ems_get(VAR he : TSYSMEM_REC; blk_num : WORD; VAR blk) : BOOLEAN;
-VAR     r : BOOLEAN;
-        win : WORD;
-BEGIN
-        r := FALSE;
-        win := ems_get_win(he.ems_h);
-        IF sysems.ems_map(he.ems_h, blk_num, win) = EMS_STATUS_OK THEN BEGIN
-                Move(ems_window[win SHL 14], blk, EMS_PAGE_SIZE);
-                sysems.ems_map(he.ems_h, EMS_PAGE_UNMAP, win);
-                r := TRUE;
-        END;
-        ems_get := r;
-END;
-
-FUNCTION xms_get(VAR he : TSYSMEM_REC; blk_num : WORD; VAR blk) : BOOLEAN;
-BEGIN
-        xms_copy(he.xms_h, blk_num, blk, XMS2DOS);
-        xms_get := TRUE;
-END;
-
-FUNCTION ems_put(VAR he : TSYSMEM_REC; blk_num : WORD; VAR blk) : BOOLEAN;
-VAR     r   : BOOLEAN;
-        win : WORD;
-BEGIN
-        r := FALSE;
-        win := ems_get_win(he.ems_h);
-        IF sysems.ems_map(he.ems_h, blk_num, win) = EMS_STATUS_OK THEN BEGIN
-                Move(blk, ems_window[win SHL 14], EMS_PAGE_SIZE);
-                sysems.ems_map(he.ems_h, EMS_PAGE_UNMAP, win);
-                r := TRUE;
-        END;
-        ems_put := r;
-END;
-
-FUNCTION xms_put(VAR he : TSYSMEM_REC; blk_num : WORD; VAR blk) : BOOLEAN;
-BEGIN
-        xms_copy(he.xms_h, blk_num, blk, DOS2XMS);
-        xms_put := TRUE;
-END;
-
-PROCEDURE ems_free(VAR he : TSYSMEM_REC);
-VAR     i : INTEGER;
-BEGIN
-        IF he.ems_h <> 0 THEN BEGIN
-                FOR i := 0 TO 3 DO BEGIN
-                        IF ems_windows[i] = he.ems_h THEN BEGIN
-                                ems_windows[i] := 0;
+         END ELSE BEGIN
+                Dec(blk_count, he.size);
+                IF he.hndls_count <> 0 THEN BEGIN
+                        w := 0;
+                        h := he.hndls[he.hndls_count].hndl;
+                        p := he.hndls[he.hndls_count].pages;
+                        IF $0FF0 > p THEN w := $0FF0 - p;
+                        IF w > blk_count THEN w := blk_count;
+                        IF w <> 0 THEN BEGIN
+                                nw := (w AND $FFFC) OR 3;
+                                IF memtype = MT_XMS THEN
+                                        h := xms_realloc(h, p, p + nw)
+                                ELSE IF memtype = MT_EMS THEN
+                                        h := ems_realloc(h, p, p + nw);
+                                IF h <> 0 THEN BEGIN
+                                        he.hndls[he.hndls_count].hndl := h;
+                                        he.hndls[he.hndls_count].pages := p + w;
+                                        Dec(blk_count, w);
+                                        Inc(he.size, nw);
+                                END;
                         END;
                 END;
-                sysems.ems_free(he.ems_h);
+                WHILE blk_count <> 0 DO BEGIN
+                        IF blk_count > $0FF0 THEN w := $0FF0 ELSE w := blk_count;
+                        IF memtype = MT_XMS THEN maxavail := xms_maxavail
+                        ELSE IF memtype = MT_EMS THEN maxavail := ems_maxavail;
+                        IF maxavail = 0 THEN BREAK;
+                        IF w > maxavail THEN BEGIN
+                                w := maxavail;
+                                Dec(blk_count, w);
+                        END ELSE BEGIN
+                                Dec(blk_count, w);
+                                w := (w AND $FFFC) OR 3;
+                        END;
+
+                        IF memtype = MT_XMS THEN h := xms_malloc(w)
+                        ELSE IF memtype = MT_EMS THEN h := ems_malloc(w);
+                
+                        IF h = 0 THEN BREAK;
+
+                        Inc(he.hndls_count);
+                        he.hndls[he.hndls_count].hndl := h;
+                        he.hndls[he.hndls_count].pages := w;
+                        Inc(he.size, w);
+                END;
         END;
+        Realloc := blk_count = 0;
 END;
 
-PROCEDURE xms_free(VAR he : TSYSMEM_REC);
+FUNCTION GetHandl(VAR he : TSYSMEM_REC; blk_num : DWORD; VAR new_blk_num : WORD) : WORD;
+VAR     r, p : WORD;
+        i    : INTEGER;
 BEGIN
-        IF he.xms_h <> 0 THEN sysxms.xms_free(he.xms_h);
+        r := 0;
+        IF he.size > blk_num THEN BEGIN
+                i := 1;
+                WHILE i <= he.hndls_count DO BEGIN
+                        p := he.hndls[i].pages;
+                        IF p > blk_num THEN BEGIN
+                                r := he.hndls[i].hndl;
+                                new_blk_num := blk_num;
+                                BREAK;
+                        END;
+                        Dec(blk_num, p);
+                        Inc(i);
+                END;
+        END;
+        GetHandl := r;
 END;
 
 FUNCTION sysmem_avail : BOOLEAN;
@@ -155,67 +186,89 @@ BEGIN
         sysmem_avail := memtype IN [MT_EMS, MT_XMS];
 END;
 
-FUNCTION sysmem_alloc(blk_count : WORD):POINTER;
-VAR     he : Psysmem_REC;
-        r  : BOOLEAN;
+FUNCTION sysmem_alloc:POINTER;
+VAR     he : PSYSMEM_REC;
 BEGIN
         he := NIL;
-        IF memtype <> MT_NONE THEN BEGIN
-                GetMem(he, SizeOf(Tsysmem_REC));
-                IF he <> NIL THEN BEGIN
-                        FillChar(he^, SizeOf(Tsysmem_REC), #0);
-                        IF memtype = MT_EMS THEN r := sysmem.ems_alloc(he^, blk_count)
-                        ELSE IF memtype = MT_XMS THEN r := sysmem.xms_alloc(he^, blk_count)
-                        ELSE r := FALSE;
-                        IF r THEN he^.size := blk_count ELSE BEGIN
-                                FreeMem(he, SizeOf(Tsysmem_REC));
-                                he := NIL;
-                        END;
-                END;
-        END;
+        IF memtype <> MT_NONE THEN GetMem(he, SizeOf(TSYSMEM_REC));
+        IF he <> NIL THEN FillChar(he^, SizeOf(TSYSMEM_REC), #0);
         sysmem_alloc := he;
 END;
 
-FUNCTION sysmem_get(h : POINTER; blk_num:WORD; VAR blk) : BOOLEAN;
+FUNCTION sysmem_get(p : POINTER; blk_num : DWORD; VAR blk) : BOOLEAN;
+VAR     r    : BOOLEAN;
+        h    : WORD;
+        he   : PSYSMEM_REC;
+        nnum : WORD;
 BEGIN
-        IF h = NIL THEN sysmem_get := FALSE
-        ELSE IF blk_num >= Psysmem_REC(h)^.size THEN sysmem_get := FALSE
-        ELSE IF memtype = MT_XMS THEN sysmem_get := xms_get(PSYSMEM_REC(h)^, blk_num, blk)
-        ELSE IF memtype = MT_EMS THEN sysmem_get := ems_get(PSYSMEM_REC(h)^, blk_num, blk)
-        ELSE sysmem_get := FALSE;
-END;
-
-FUNCTION sysmem_put(h : POINTER; blk_num : WORD; VAR blk) : BOOLEAN;
-BEGIN
-        IF h = NIL THEN sysmem_put := FALSE
-        ELSE IF blk_num >= Psysmem_REC(h)^.size THEN sysmem_put := FALSE
-        ELSE IF memtype = MT_XMS THEN sysmem_put := xms_put(PSYSMEM_REC(h)^, blk_num, blk)
-        ELSE IF memtype = MT_EMS THEN sysmem_put := ems_put(PSYSMEM_REC(h)^, blk_num, blk)
-        ELSE sysmem_put := FALSE;
-END;
-
-PROCEDURE sysmem_free(h : POINTER);
-BEGIN
-        IF h = NIL THEN EXIT
-        ELSE IF memtype = MT_XMS THEN xms_free(PSYSMEM_REC(h)^)
-        ELSE IF memtype = MT_EMS THEN ems_free(PSYSMEM_REC(h)^);
-        FreeMem(h, SizeOf(TSYSMEM_REC));
-END;
-
-BEGIN
-        ems_installed := FALSE;
-        xms_installed := FALSE;
-        ems_window := NIL;
-        FillChar(ems_windows, SizeOf(ems_windows), #0);
-        memtype := MT_NONE;
-
-        xms_installed := xms_check_driver;
-        IF ems_check_driver THEN IF ems_get_status = EMS_STATUS_OK THEN BEGIN
-                ems_installed := TRUE;
-                ems_window := ems_get_window;
-                ems_winnum := 0;
+        r := FALSE;
+        IF p <> NIL THEN BEGIN
+                he := PSYSMEM_REC(p);
+                IF blk_num <= he^.size THEN BEGIN
+                        h := GetHandl(he^, blk_num, nnum);
+                        IF h <> 0 THEN BEGIN
+                                IF memtype = MT_XMS THEN BEGIN
+                                        xms_copy(h, nnum, blk, XMS2DOS);
+                                END ELSE IF memtype = MT_EMS THEN BEGIN
+                                        ems_copy(h, nnum, blk, EMS2DOS);
+                                END;
+                                r := TRUE;
+                        END;
+                END;
         END;
+        sysmem_get := r;
+END;
 
-        IF xms_installed THEN memtype := MT_XMS
-        ELSE IF ems_installed THEN memtype := MT_EMS;
+FUNCTION sysmem_put(p : POINTER; blk_num : DWORD; VAR blk) : BOOLEAN;
+VAR     r    : BOOLEAN;
+        h    : WORD;
+        he   : PSYSMEM_REC;
+        nnum : WORD;
+BEGIN
+        r := FALSE;
+        IF p <> NIL THEN BEGIN
+                he := PSYSMEM_REC(p);
+                h := 0;
+                IF blk_num < he^.size THEN h := GetHandl(he^, blk_num, nnum)
+                ELSE IF Realloc(he^, blk_num + 1) THEN h := GetHandl(he^, blk_num, nnum);
+                IF h <> 0 THEN BEGIN
+                        IF memtype = MT_XMS THEN BEGIN
+                                xms_copy(h, nnum, blk, DOS2XMS);
+                        END ELSE IF memtype = MT_EMS THEN BEGIN
+                                ems_copy(h, nnum, blk, DOS2EMS);
+                        END;
+                        r := TRUE;
+                END;
+        END;
+        sysmem_put := r;
+END;
+
+PROCEDURE sysmem_free(p : POINTER);
+VAR     i  : INTEGER;
+        he : PSYSMEM_REC;
+BEGIN
+        IF p = NIL THEN EXIT;
+        he := PSYSMEM_REC(p);
+        FOR i := 1 TO he^.hndls_count DO BEGIN
+                IF memtype = MT_XMS THEN BEGIN
+                        xms_free(he^.hndls[i].hndl);
+                END ELSE IF memtype = MT_EMS THEN BEGIN
+                        ems_free(he^.hndls[i].hndl);
+                END;
+        END;
+        FillChar(he^, SizeOf(TSYSMEM_REC), #0);
+        FreeMem(p, SizeOf(TSYSMEM_REC));
+END;
+
+FUNCTION sysmem_truncate(p : POINTER; blk_num : DWORD) : BOOLEAN;
+BEGIN
+        IF p <> NIL THEN sysmem_truncate := Realloc(PSYSMEM_REC(p)^, blk_num + 1)
+        ELSE sysmem_truncate := FALSE;
+END;
+
+BEGIN
+                xms_installed := xms_check_driver;
+                IF ems_check_driver THEN ems_installed := ems_get_status = EMS_STATUS_OK;
+                IF xms_installed THEN memtype := MT_XMS
+                ELSE IF ems_installed THEN memtype := MT_EMS;
 END.
