@@ -4,7 +4,7 @@
 
   It has support for:
 
-  1. Long file names
+  1. Long file names (LFN).
   2. Buffered I/O (DOS memory, 16K per file).
   3. Buffered I/O (EMS/XMS), up to 512 KB per file.
   4. File in memory (EMS/XMS) up to 4G each.
@@ -17,7 +17,12 @@
 #  WinCB
 
   Unit for Windows Clipboard support for MS-DOS applications.
+  64KB limited.
+
+#  StrBin
+
+  Convert Byte/Integers/Longint to/from string in various format.
 
 # License
 
-MIT License
+MIT License, See LICENSE file.

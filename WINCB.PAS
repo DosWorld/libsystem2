@@ -30,39 +30,47 @@ UNIT WinCB;
 
 INTERFACE
 
-FUNCTION WCB_Detect:BOOLEAN;
-PROCEDURE WCB_Open;
-PROCEDURE WCB_Clear;
-PROCEDURE WCB_GetData(VAR d);
-PROCEDURE WCB_SetData(VAR d; size : WORD);
-FUNCTION WCB_GetDataSize:LONGINT;
-PROCEDURE WCB_Close;
+FUNCTION WCB_Detect : BOOLEAN;
+
+FUNCTION WCB_Copy(VAR d; size : WORD) : BOOLEAN;
+FUNCTION WCB_Paste(VAR d; max_size : WORD) : BOOLEAN;
 
 IMPLEMENTATION
 
-FUNCTION WCB_Detect:BOOLEAN;ASSEMBLER;
+FUNCTION WCB_Detect : BOOLEAN;ASSEMBLER;
 ASM
         MOV  AX, $1700
         INT  $2F
         XOR  BX, BX
         CMP  AX, $1700
-        INT  $2F
         JE   @end
         INC  BX
 @end:
         MOV  AX, BX
 END;
 
-PROCEDURE WCB_Clear;ASSEMBLER;
+FUNCTION WCB_Clear : BOOLEAN;ASSEMBLER;
 ASM
         MOV  AX, $1702
         INT  $2F
+        XOR  BX, BX
+        OR   AX, AX
+        JZ   @end
+        INC  BX
+@end:
+        MOV  AX, BX
 END;
 
-PROCEDURE WCB_Open;ASSEMBLER;
+FUNCTION WCB_Open : BOOLEAN;ASSEMBLER;
 ASM
         MOV  AX, $1701
         INT  $2F
+        XOR  BX, BX
+        OR   AX, AX
+        JZ   @end
+        INC  BX
+@end:
+        MOV  AX, BX
 END;
 
 PROCEDURE WCB_Close;ASSEMBLER;
@@ -71,7 +79,7 @@ ASM
         INT  $2F
 END;
 
-PROCEDURE WCB_SetData(VAR d; size : WORD);ASSEMBLER;
+FUNCTION WCB_SetData(VAR d; size : WORD) : BOOLEAN;ASSEMBLER;
 ASM
         PUSH ES
         LES  BX, d
@@ -81,9 +89,15 @@ ASM
         MOV  DX, 1
         INT  $2F
         POP  ES
+        XOR  BX, BX
+        OR   AX, AX
+        JZ   @end
+        INC  BX
+@end:
+        MOV  BX, AX
 END;
 
-PROCEDURE WCB_GetData(VAR d);ASSEMBLER;
+FUNCTION WCB_GetData(VAR d) : BOOLEAN;ASSEMBLER;
 ASM
         PUSH ES
         LES  BX, d
@@ -91,13 +105,53 @@ ASM
         MOV  AX, $1705
         INT  $2F
         POP  ES
+        XOR  BX, BX
+        OR   AX, AX
+        JZ   @end
+        INC  BX
+@end:
+        MOV  AX, BX
 END;
 
-FUNCTION WCB_GetDataSize:LONGINT;ASSEMBLER;
+FUNCTION WCB_GetDataSize : LONGINT;ASSEMBLER;
 ASM
         MOV  AX, $1704
         MOV  DX, 1
         INT  $2F
+END;
+
+FUNCTION WCB_Copy(VAR d; size : WORD) : BOOLEAN;
+VAR     r : BOOLEAN;
+BEGIN
+        r := FALSE;
+        IF WCB_Detect THEN
+                IF WCB_Open THEN
+                        IF WCB_Clear THEN BEGIN
+                                r := WCB_SetData(d, size);
+                                WCB_Close;
+                        END;
+        WCB_Copy := r;
+END;
+
+FUNCTION WCB_Paste(VAR d; max_size : WORD) : BOOLEAN;
+VAR     r    : BOOLEAN;
+        size : LONGINT;
+        p    : PCHAR;
+BEGIN
+        r := FALSE;
+        IF WCB_Detect THEN
+                IF WCB_Open THEN BEGIN
+                        size := WCB_GetDataSize;
+                        IF (size - 1) < max_size THEN BEGIN
+                                r := WCB_GetData(d);
+                                IF r THEN BEGIN
+                                        p := @d;
+                                        p[size] := #0;
+                                END;
+                        END;
+                        WCB_Close;
+                END;
+        WCB_Paste := r;
 END;
 
 END.

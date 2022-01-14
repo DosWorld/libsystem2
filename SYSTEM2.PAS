@@ -96,8 +96,7 @@ PROCEDURE ReWrite (VAR f : BFILE);
 { ReWriteTemp does not requre call to Assign }
 PROCEDURE ReWriteTemp (VAR f : BFILE);
 
-{ ReWriteMemFile does not requre call to Assign.
-  size - amount of 16K pages }
+{ ReWriteMemFile does not requre call to Assign.}
 PROCEDURE ReWriteMemFile (VAR f : BFILE);
 
 FUNCTION Eof (VAR f : BFILE) : BOOLEAN;
