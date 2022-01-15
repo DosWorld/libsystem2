@@ -11,9 +11,6 @@
   5. Temporary files.
   6. Quoted command-line parameters.
 
-  NOTE about 16K: This value became from EMS-page size,
-  so please dont change it.
-
 #  WinCB
 
   Unit for Windows Clipboard support for MS-DOS applications.
@@ -22,6 +19,10 @@
 #  StrBin
 
   Convert Byte/Integers/Longint to/from string in various format.
+
+#  Args
+
+  Unit for command-line parsing.
 
 # License
 

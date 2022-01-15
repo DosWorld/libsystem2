@@ -127,7 +127,7 @@ BEGIN
         IF WCB_Detect THEN
                 IF WCB_Open THEN
                         IF WCB_Clear THEN BEGIN
-                                r := WCB_SetData(d, size);
+                                r := WCB_SetData(d, (size AND $FFE0) OR $1F);
                                 WCB_Close;
                         END;
         WCB_Copy := r;
