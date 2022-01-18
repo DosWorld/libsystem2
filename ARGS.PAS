@@ -33,7 +33,8 @@ UNIT Args;
 
   NOTE: Does not support unicode.
 
-  Command line format:
+  Command line format
+  ==========================================
 
   NAME.EXE [command] [options] [arguments]
 
@@ -67,7 +68,8 @@ UNIT Args;
   filename.ext
   "C:\My Files\long file name.ext"
 
-  Usage example:
+  Usage example
+  ==========================================
 
         USES args;
 
@@ -102,6 +104,29 @@ UNIT Args;
                 END;
                 View;
         END.
+
+  Example of generated help
+  ==========================================
+
+        Usage: RLINKT.EXE command [options] arg0 .. argN
+
+        Commands:
+
+         rdf - Link RDF file. Merge all segments into one code segment.
+         com - Link COM file.
+         hmz - Link MZ file, huge memory model.
+         smz - Link MZ file, small memory model.
+
+        Options:
+
+         /o=<val>     Set output file name.
+         /org=<val>   Set code start offset for COM output. (default "0x0100")
+         /entry=<val> Set entry-point name. (default "start")
+         /s=<val>     Set stack size in KB. (default "8")
+         /bss         Reserve BSS-memory for COM/RDF output.
+         /noextmem    Use temporary files instead EMS/XMS memory.
+
+        Use /? for help.
   ========================================================================= }
 INTERFACE
 
