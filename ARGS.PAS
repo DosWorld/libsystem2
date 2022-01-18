@@ -28,21 +28,60 @@ UNIT Args;
 
   Produce help-screen via ArgsHelp
 
+  NOTE: Don't open files (or allocate memory) before your call ArgsParse.
+  ArgsParse will print help and stop your program, if find '/?' in parameters.
+
+  NOTE: Does not support unicode.
+
+  Command line format:
+
+  NAME.EXE [command] [options] [arguments]
+
+  For example:
+  ÚÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ¿
+  ³ COOL.EXE create /size=1024 /uppercase file.exe ³
+  ÃÄÄÄÄÄÄÄÄÄÄÄÄÂÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ´
+  ³ create     ³ command                           ³
+  ÃÄÄÄÄÄÄÄÄÄÄÄÄÅÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ´
+  ³ /size=1024 ³ string option                     ³
+  ³ /uppercase ³ boolean option                    ³
+  ÃÄÄÄÄÄÄÄÄÄÄÄÄÅÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ´
+  ³ file.exe   ³ Argument1                         ³
+  ÀÄÄÄÄÄÄÄÄÄÄÄÄÁÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÙ
+
+  Command format
+  --------------
+  command (without quotes and spaces).
+
+  Options format
+  --------------
+  string:
+  /optName=value
+  /optName="value with spaces"
+
+  boolean:
+  /optName for TRUE, other case - FALSE
+
+  Arguments format
+  ----------------
+  filename.ext
+  "C:\My Files\long file name.ext"
+
   Usage example:
 
         USES args;
-        
+
         CONST
-        
+
         a : ARRAY[0..3] OF TOPT = (
         (name : 'o'; otype : OPTSTR; help : 'Set output file name.'),
         (name : 'y'; otype : OPTBOOL; help : 'Boolean opt'),
         (name : 'a'; otype : OPTCMD; help : 'Command type (like add something)'),
         (name : 'd'; otype : OPTCMD; help : 'Command type (like del something)')
         );
-        
+
         VAR state : TARGSTATE;
-        
+
         PROCEDURE View;
         VAR i : INTEGER;
         BEGIN
@@ -334,7 +373,7 @@ BEGIN
                         IF (maxLen < ORD(state.opts[i]^.name[0]))
                         AND (state.opts[i]^.otype <> OPTCMD)
                         THEN maxLen := ORD(state.opts[i]^.name[0]);
-                Inc(maxLen, 7);
+                Inc(maxLen, 4);
                 WriteLn;
                 WriteLn('Options:');
                 WriteLn;
