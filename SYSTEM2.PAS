@@ -1284,7 +1284,7 @@ END;
 FUNCTION ReadByte(VAR f : BFILE) : BYTE;
 VAR r : BYTE;
 BEGIN
-        BlockRead(f, r, SizeOf(r));
+        IF BlockRead(f, r, SizeOf(r)) <> 1 THEN r := 0;
         ReadByte := r;
 END;
 
@@ -1292,9 +1292,11 @@ FUNCTION ReadWord(VAR f : BFILE) : WORD;
 VAR     b : ARRAY[0..1] OF BYTE;
         w : WORD;
 BEGIN
-        BlockRead(f, b, SizeOf(b));
-        w := b[0] AND $FF;
-        w := w OR ((b[1] AND $FF) SHL 8);
+        w := 0;
+        IF BlockRead(f, b, SizeOf(b)) = 2 THEN BEGIN
+                w := b[0] AND $FF;
+                w := w OR ((b[1] AND $FF) SHL 8);
+        END;
         ReadWord := w;
 END;
 
@@ -1303,11 +1305,13 @@ VAR
         b  : ARRAY[0..3] OF BYTE;
         dw : DWORD;
 BEGIN
-        BlockRead(f, b, SizeOf(b));
-        dw := b[0] AND $FF;
-        dw := dw OR ((b[1] AND $FF) SHL 8);
-        dw := dw OR ((b[2] AND $FF) SHL 16);
-        dw := dw OR ((b[3] AND $FF) SHL 24);
+        dw := 0;
+        IF BlockRead(f, b, SizeOf(b)) = 4 THEN BEGIN
+                dw := b[0] AND $FF;
+                dw := dw OR ((b[1] AND $FF) SHL 8);
+                dw := dw OR ((b[2] AND $FF) SHL 16);
+                dw := dw OR ((b[3] AND $FF) SHL 24);
+        END;
         ReadDWord := dw;
 END;
 

@@ -36,7 +36,7 @@ UNIT Args;
   Command line format
   ==========================================
 
-  NAME.EXE [command] [options] [arguments]
+  NAME.EXE [command] [flags/options] [arguments]
 
   For example:
   ÚÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ¿
@@ -45,7 +45,7 @@ UNIT Args;
   ³ create     ³ command                           ³
   ÃÄÄÄÄÄÄÄÄÄÄÄÄÅÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ´
   ³ /size=1024 ³ string option                     ³
-  ³ /uppercase ³ boolean option                    ³
+  ³ /uppercase ³ flag                              ³
   ÃÄÄÄÄÄÄÄÄÄÄÄÄÅÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄ´
   ³ file.exe   ³ Argument1                         ³
   ÀÄÄÄÄÄÄÄÄÄÄÄÄÁÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÄÙ
@@ -60,7 +60,7 @@ UNIT Args;
   /optName=value
   /optName="value with spaces"
 
-  boolean:
+  flag (boolean):
   /optName for TRUE, other case - FALSE
 
   Arguments format
@@ -108,25 +108,26 @@ UNIT Args;
   Example of generated help
   ==========================================
 
-        Usage: RLINKT.EXE command [options] arg0 .. argN
+        Usage: RLINK.EXE command [flags/options] arg0 .. argN
 
         Commands:
-
          rdf - Link RDF file. Merge all segments into one code segment.
-         com - Link COM file.
-         hmz - Link MZ file, huge memory model.
-         smz - Link MZ file, small memory model.
+         com - Link COM file, tiny memory model.
+         mzs - Link MZ file, small memory model.
+         mzh - Link MZ file, huge memory model.
+
+        Flags:
+         /bss      Reserve BSS-memory for COM/RDF output.
+         /noextmem Use temporary files instead EMS/XMS memory.
 
         Options:
-
-         /o=<val>     Set output file name.
-         /org=<val>   Set code start offset for COM output. (default "0x0100")
-         /entry=<val> Set entry-point name. (default "start")
-         /s=<val>     Set stack size in KB. (default "8")
-         /bss         Reserve BSS-memory for COM/RDF output.
-         /noextmem    Use temporary files instead EMS/XMS memory.
+         /o=<v>     Set output file name.
+         /org=<v>   Set code start offset for COM output. (default "0x0100")
+         /entry=<v> Set entry-point name. (default "start")
+         /s=<v>     Set stack size in KB. (default "8")
 
         Use /? for help.
+
   ========================================================================= }
 INTERFACE
 
@@ -156,16 +157,17 @@ TARGSTATE = RECORD
         opts_val   : ARRAY[1..MAX_OPTS] OF BYTE;
         opts_size  : BYTE;
         
-        args        :ARRAY[1..MAX_OPTS] OF BYTE;
-        opts_count : BYTE;
-        args_count : BYTE;
-        cmds_count : BYTE;
-        cmd        : BYTE;
+        args        : ARRAY[1..MAX_OPTS] OF BYTE;
+        opts_count  : BYTE;
+        flags_count : BYTE;
+        args_count  : BYTE;
+        cmds_count  : BYTE;
+        cmd         : BYTE;
+
+        error       : BOOLEAN;
+        errMsg      : STRING;
         
-        error      : BOOLEAN;
-        errMsg     : STRING;
-        
-        cmdl       : STRING;
+        cmdl        : STRING;
 END;
 
 PROCEDURE ArgsParse(VAR state : TARGSTATE; VAR a : ARRAY OF TOPT);
@@ -274,7 +276,7 @@ VAR     i, len      : INTEGER;
 BEGIN
         i := 1; len := Length(s);
         WHILE (i <= len) AND (s[i] <= ' ') DO Inc(i); { skip spaces }
-        IF (i <= len) AND (NOT (s[i] IN ['-','/'])) THEN BEGIN
+        IF (i <= len) AND (NOT (s[i] IN ['-','/'])) AND (state.cmds_count <> 0) THEN BEGIN
                 name := '';
                 WHILE (i <= len) AND (s[i] > ' ') DO BEGIN
                         Inc(name[0]);
@@ -289,45 +291,43 @@ BEGIN
                 state.cmd := k;
                 WHILE (i <= len) AND (s[i] <= ' ') DO Inc(i); { skip spaces }
         END;
-        IF state.opts_count <> 0 THEN BEGIN
-                WHILE (i <= len) AND (s[i] IN ['-','/']) AND (NOT state.error) DO BEGIN
+        WHILE (i <= len) AND (s[i] IN ['-','/']) AND (NOT state.error) DO BEGIN
+                Inc(i);
+                name := ''; value := 0;
+                WHILE (i <= len) AND (s[i] > ' ') AND (s[i] <> '=') DO BEGIN
+                        Inc(name[0]);
+                        name[ORD(name[0])] := s[i];
                         Inc(i);
-                        name := ''; value := 0;
-                        WHILE (i <= len) AND (s[i] > ' ') AND (s[i] <> '=') DO BEGIN
-                                Inc(name[0]);
-                                name[ORD(name[0])] := s[i];
-                                Inc(i);
-                        END;
-                        IF name = '?' THEN ArgsHelp(state, TRUE);
-                        k := LookupName(state, name);
-                        IF (k = -1) THEN BEGIN
-                                SetArgsErr(state, '/' + name + ' - ' + ERR_OPT_BAD_NAME);
-                                EXIT;
-                        END;
-                        IF NOT (state.opts[k]^.otype IN [OPTSTR,OPTBOOL]) THEN BEGIN
-                                SetArgsErr(state, '/' + name + ' - ' + ERR_OPT_BAD_NAME);
-                                EXIT;
-                        END;
-                        IF state.opts_val[k] <> 0 THEN BEGIN
-                                SetArgsErr(state, '/' + name + ' ' + ERR_OPT_MULTI);
-                                EXIT;
-                        END;
-                        errMsg := ERR_OPT_BAD_VALUE + ' /' + name;
-                        IF state.opts[k]^.otype = OPTBOOL THEN BEGIN
-                                state.opts_val[k] := 255;
-                        END ELSE IF (i <= len) AND (s[i] = '=') THEN BEGIN
-                                Inc(i);
-                                IF (i <= len) AND (s[i] <> '"') THEN BEGIN
-                                        state.opts_val[k] := i;
-                                        ProcessValue(state, i, len, s, FALSE, errMsg);
-                                END ELSE IF (i <= len) AND (s[i] = '"') THEN BEGIN
-                                        Inc(i);
-                                        state.opts_val[k] := i;
-                                        ProcessValue(state, i, len, s, TRUE, errMsg);
-                                END ELSE SetArgsErr(state, errMsg);
-                        END ELSE SetArgsErr(state, errMsg);
-                        WHILE (i <= len) AND (s[i] <= ' ') DO Inc(i); { skip spaces }
                 END;
+                IF name = '?' THEN ArgsHelp(state, TRUE);
+                k := LookupName(state, name);
+                IF (k = -1) THEN BEGIN
+                        SetArgsErr(state, '/' + name + ' - ' + ERR_OPT_BAD_NAME);
+                        EXIT;
+                END;
+                IF NOT (state.opts[k]^.otype IN [OPTSTR,OPTBOOL]) THEN BEGIN
+                        SetArgsErr(state, '/' + name + ' - ' + ERR_OPT_BAD_NAME);
+                        EXIT;
+                END;
+                IF state.opts_val[k] <> 0 THEN BEGIN
+                        SetArgsErr(state, '/' + name + ' ' + ERR_OPT_MULTI);
+                        EXIT;
+                END;
+                errMsg := ERR_OPT_BAD_VALUE + ' /' + name;
+                IF state.opts[k]^.otype = OPTBOOL THEN BEGIN
+                        state.opts_val[k] := 255;
+                END ELSE IF (i <= len) AND (s[i] = '=') THEN BEGIN
+                        Inc(i);
+                        IF (i <= len) AND (s[i] <> '"') THEN BEGIN
+                                state.opts_val[k] := i;
+                                ProcessValue(state, i, len, s, FALSE, errMsg);
+                        END ELSE IF (i <= len) AND (s[i] = '"') THEN BEGIN
+                                Inc(i);
+                                state.opts_val[k] := i;
+                                ProcessValue(state, i, len, s, TRUE, errMsg);
+                        END ELSE SetArgsErr(state, errMsg);
+                END ELSE SetArgsErr(state, errMsg);
+                WHILE (i <= len) AND (s[i] <= ' ') DO Inc(i); { skip spaces }
         END;
         WHILE (i <= len) AND (NOT state.error) DO BEGIN
                 Inc(state.args_count);
@@ -360,6 +360,7 @@ BEGIN
                 Inc(state.opts_size);
                 state.opts[state.opts_size] := @a[i];
                 IF a[i].otype = OPTCMD THEN Inc(state.cmds_count)
+                ELSE IF a[i].otype = OPTBOOL THEN Inc(state.flags_count)
                 ELSE Inc(state.opts_count);
         END;
         state.cmdl := PSTRING(ptr(PrefixSeg, $80))^;
@@ -373,7 +374,7 @@ VAR     i, maxLen  : INTEGER;
 BEGIN
         Write('Usage: ', GetSelfName);
         IF state.cmds_count <> 0 THEN Write(' command');
-        IF state.opts_count <> 0 THEN Write(' [options]');
+        IF (state.opts_count + state.flags_count) <> 0 THEN Write(' [flags/options]');
         WriteLn(' arg0 .. argN');
         IF state.cmds_count <> 0 THEN BEGIN
                 maxLen := 0;
@@ -383,7 +384,6 @@ BEGIN
                         THEN maxLen := ORD(state.opts[i]^.name[0]);
                 WriteLn;
                 WriteLn('Commands:');
-                WriteLn;
                 FOR i := 1 TO state.opts_size DO
                 IF state.opts[i]^.otype = OPTCMD THEN BEGIN
                         name := state.opts[i]^.name;
@@ -392,23 +392,36 @@ BEGIN
                         WriteLn(state.opts[i]^.help);
                 END;
         END;
+        IF state.flags_count <> 0 THEN BEGIN
+                maxLen := 0;
+                FOR i := 1 TO state.opts_size DO
+                        IF (maxLen < ORD(state.opts[i]^.name[0]))
+                        AND (state.opts[i]^.otype = OPTBOOL)
+                        THEN maxLen := ORD(state.opts[i]^.name[0]);
+                Inc(maxLen, 1);
+                WriteLn;
+                WriteLn('Flags:');
+                FOR i := 1 TO state.opts_size DO
+                IF state.opts[i]^.otype = OPTBOOL THEN BEGIN
+                        name := state.opts[i]^.name;
+                        WHILE ORD(name[0]) < maxLen DO name := name + ' ';
+                        WriteLn(' /', name, state.opts[i]^.help);
+                END;
+        END;
         IF state.opts_count <> 0 THEN BEGIN
                 maxLen := 0;
                 FOR i := 1 TO state.opts_size DO
                         IF (maxLen < ORD(state.opts[i]^.name[0]))
-                        AND (state.opts[i]^.otype <> OPTCMD)
+                        AND (state.opts[i]^.otype = OPTSTR)
                         THEN maxLen := ORD(state.opts[i]^.name[0]);
-                Inc(maxLen, 4);
+                Inc(maxLen, 5);
                 WriteLn;
                 WriteLn('Options:');
-                WriteLn;
                 FOR i := 1 TO state.opts_size DO
-                IF state.opts[i]^.otype <> OPTCMD THEN BEGIN
-                        name := state.opts[i]^.name;
-                        IF state.opts[i]^.otype = OPTSTR THEN name := name +'=<val>';
+                IF state.opts[i]^.otype = OPTSTR THEN BEGIN
+                        name := state.opts[i]^.name + '=<v>';
                         WHILE ORD(name[0]) < maxLen DO name := name + ' ';
-                        Write(' /', name);
-                        Write(state.opts[i]^.help);
+                        Write(' /', name, state.opts[i]^.help);
                         IF Length(state.opts[i]^.default) <> 0 THEN
                                 Write(' (default "', state.opts[i]^.default, '")');
                         WriteLn;
