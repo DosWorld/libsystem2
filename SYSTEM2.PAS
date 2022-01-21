@@ -67,6 +67,7 @@ TCACHE_PAGE = RECORD
 END;
 {$ENDIF}
 
+PBFILE = ^BFILE;
 BFILE = RECORD
         f           : WORD;
         filename    : STRING;
