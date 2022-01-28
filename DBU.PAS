@@ -22,201 +22,246 @@ SOFTWARE.
 }
 {$A+,I-,S-,R-,D-,L-,Q-,F-,G-,O-,B-}
 UNIT DBU;
-
+{ =========================================================================
+  This is unit implements dbu files (like a .dbt) - container for memo fields.
+  ========================================================================= }
 INTERFACE
 
 USES System2;
 
+CONST
+DBU_BLOCK_SIZE = 512;
+
 TYPE
-PDBUFile = ^DBUFile;
-DBUFile=RECORD
-        f          : PBFILE;
-        idx        : PBFIle;
-        first_free : WORD;
+DBU_REC = RECORD
+        next       : LONGINT;
+        size       : WORD;
 END;
 
-PROCEDURE DBU_Reset(VAR d : DBUFile; VAR f, idx : BFile);
-PROCEDURE DBU_ReWrite(VAR d : DBUFile; VAR f, idx : BFile);
-FUNCTION DBU_IsOpen(VAR d : DBUFile) : BOOLEAN;
-FUNCTION DBU_Create(VAR d : DBUFile) : WORD;
-PROCEDURE DBU_Read(VAR d : DBUFile; h : WORD; ofs : DWORD; VAR mem; size : WORD);
-PROCEDURE DBU_Write(VAR d : DBUFile; h : WORD; ofs : DWORD; VAR mem; size : WORD);
-PROCEDURE DBU_Free(VAR d : DBUFile; h : WORD);
-PROCEDURE DBU_Close(VAR d : DBUFile);
+PDBUFile = ^DBUFile;
+DBUFile=RECORD
+        f          : BFILE;
+        header     : DBU_REC;
+        crec       : DBU_REC;
+        crecno     : LONGINT;
+        needupdate : BOOLEAN;
+        data       : PCHAR;
+END;
+
+PROCEDURE dbu_reset(VAR f : DBUFile; fname : STRING; blk_size : WORD);
+PROCEDURE dbu_rewrite(VAR f : DBUFile; fname : STRING; blk_size : WORD);
+PROCEDURE dbu_rewrite_memfile(VAR f : DBUFile; blk_size : WORD);
+
+FUNCTION dbu_isopen(VAR f : DBUFile) : BOOLEAN;
+
+PROCEDURE dbu_get(VAR f : DBUFile; rec : LONGINT; VAR b; size : WORD);
+FUNCTION dbu_put(VAR f : DBUFile; VAR b; size : WORD) : LONGINT;
+FUNCTION dbu_size(VAR f : DBUFile; rec : LONGINT) : LONGINT;
+
+PROCEDURE dbu_free(VAR f : DBUFile; rec : LONGINT);
+
+PROCEDURE dbu_close(VAR f : DBUFile);
 
 IMPLEMENTATION
 
-CONST
-BLOCK_SIZE_KB = 16;
-BLOCK_SIZE = BLOCK_SIZE_KB * 1024;
-
-PROCEDURE L_Append(VAR d : DBUFile);
-VAR     i : INTEGER;
-        n : ARRAY[1..1024] OF CHAR;
+PROCEDURE dbu_load(VAR f : DBUFile);
 BEGIN
-        FillChar(n, SizeOf(n), #0);
-        FOR i := 1 TO BLOCK_SIZE_KB DO BlockWrite(d.f^, n, SizeOf(n));
+        Seek(f.f, f.crecno * f.header.size);
+        BlockRead(f.f, f.crec, SizeOf(DBU_REC));
+        BlockRead(f.f, f.data[0], f.header.size - SizeOf(DBU_REC));
+        f.needupdate := FALSE;
 END;
 
-FUNCTION L_Size(VAR d : DBUFile) : WORD;
-VAR     r1 : WORD;
-        r2 : WORD;
+PROCEDURE dbu_update(VAR f : DBUFile);
 BEGIN
-        r1 := FileSize(d.f^) SHR 14;
-        r2 := FileSize(d.idx^) SHR 2;
-        IF r1 > r2 THEN L_Size := r2 ELSE L_Size := r1;
+        IF (f.needupdate) AND (f.crecno <> 0) THEN BEGIN
+                Seek(f.f, f.crecno * f.header.size);
+                BlockWrite(f.f, f.crec, SizeOf(DBU_REC));
+                BlockWrite(f.f, f.data[0], f.header.size - SizeOf(DBU_REC));
+        END;
+        f.needupdate := FALSE;
 END;
 
-PROCEDURE L_Seek(VAR d : DBUFile; page : WORD);
-VAR     npage : WORD;
-        sz    : WORD;
+PROCEDURE dbu_go(VAR f : DBUFile; recno : LONGINT);
+VAR
+        nofs : LONGINT;
 BEGIN
-        sz := L_Size(d);
-        IF (sz < page) THEN BEGIN
-                Seek(d.f^, sz SHL 14);
-                Seek(d.idx^, sz SHL 1);
-                WHILE sz <= page DO BEGIN
-                        L_Append(d);
-                        WriteWord(d.idx^, d.first_free);
-                        d.first_free := sz;
-                        sz := L_Size(d);
+        IF recno = f.crecno THEN EXIT;
+        dbu_update(f);
+        nofs := recno * f.header.size;
+        FillChar(f.data[0], f.header.size - SizeOf(DBUFile), #0);
+        f.crec.next := 0;
+        f.crec.size := 0;
+        WHILE nofs > FileSize(f.f) DO BEGIN
+                Seek(f.f, (FileSize(f.f) DIV f.header.size) * f.header.size);
+                BlockWrite(f.f, f.crec, SizeOf(DBU_REC));
+                BlockWrite(f.f, f.data[0], f.header.size - SizeOf(DBU_REC));
+        END;
+        f.crecno := recno;
+        dbu_load(f);
+END;
+
+PROCEDURE dbu_reset(VAR f : DBUFile; fname : STRING; blk_size : WORD);
+BEGIN
+        FillChar(f, SizeOf(DBUFile), #0);
+        Assign(f.f, fname);
+        Reset(f.f);
+        IF NOT IsOpen(f.f) THEN dbu_rewrite(f, fname, blk_size)
+        ELSE IF SizeOf(DBU_REC) <> BlockRead(f.f, f.header, SizeOf(DBU_REC)) THEN BEGIN
+                Close(f.f);
+                dbu_rewrite(f, fname, blk_size);
+        END ELSE BEGIN
+                GetMem(f.data, blk_size - SizeOf(DBUFile));
+                FillChar(f.data[0], f.header.size - SizeOf(DBUFile), #0);
+                BlockWrite(f.f, f.data[0], f.header.size - SizeOf(DBU_REC));
+        END;
+END;
+
+PROCEDURE dbu_rewrite(VAR f : DBUFile; fname : STRING; blk_size : WORD);
+BEGIN
+        FillChar(f, SizeOf(DBUFile), #0);
+        Assign(f.f, fname);
+        ReWrite(f.f);
+        IF IsOpen(f.f) THEN BEGIN
+                f.header.next := 0;
+                f.header.size := blk_size;
+                GetMem(f.data, f.header.size - SizeOf(DBUFile));
+                FillChar(f.data[0], f.header.size - SizeOf(DBUFile), #0);
+                Seek(f.f, 0);
+                BlockWrite(f.f, f.header, SizeOf(DBU_REC));
+                BlockWrite(f.f, f.data[0], f.header.size - SizeOf(DBU_REC));
+        END;
+END;
+
+PROCEDURE dbu_rewrite_memfile(VAR f : DBUFile; blk_size : WORD);
+BEGIN
+        FillChar(f, SizeOf(DBUFile), #0);
+        ReWriteMemFile (f.f);
+        IF IsOpen(f.f) THEN BEGIN
+                f.header.next := 0;
+                f.header.size := blk_size;
+                GetMem(f.data, f.header.size - SizeOf(DBUFile));
+                FillChar(f.data[0], f.header.size - SizeOf(DBUFile), #0);
+                Seek(f.f, 0);
+                BlockWrite(f.f, f.header, SizeOf(DBU_REC));
+                BlockWrite(f.f, f.data[0], f.header.size - SizeOf(DBU_REC));
+        END;
+END;
+
+FUNCTION dbu_isopen(VAR f : DBUFile) : BOOLEAN;
+BEGIN
+        dbu_isopen := IsOpen(f.f);
+END;
+
+PROCEDURE dbu_close(VAR f : DBUFile);
+BEGIN
+        IF NOT IsOpen(f.f) THEN EXIT;
+        dbu_update(f);
+        Seek(f.f, 0);
+        FillChar(f.data[0], f.header.size - SizeOf(DBUFile), #0);
+        BlockWrite(f.f, f.header, SizeOf(DBU_REC));
+        BlockWrite(f.f, f.data[0], f.header.size - SizeOf(DBU_REC));
+        Close(f.f);
+        IF f.data <> NIL THEN FreeMem(f.data, f.header.size - SizeOf(DBUFile));
+        FillChar(f, SizeOf(DBUFile), #0);
+END;
+
+PROCEDURE dbu_free(VAR f : DBUFile; rec : LONGINT);
+VAR     n : LONGINT;
+BEGIN
+        IF NOT IsOpen(f.f) THEN EXIT;
+        WHILE rec <> 0 DO BEGIN
+                dbu_go(f, rec);
+                n := f.crec.next;
+                f.crec.next := f.header.next;
+                f.crec.size := 0;
+                f.needupdate := TRUE;
+                f.header.next := rec;
+                rec := n;
+        END;
+END;
+
+FUNCTION dbu_alloc(VAR f : DBUFile) : LONGINT;
+VAR     r : LONGINT;
+BEGIN
+        IF f.header.next <> 0 THEN BEGIN
+                r := f.header.next;
+                dbu_go(f, r);
+                f.header.next := f.crec.next;
+        END ELSE BEGIN
+                r := FileSize(f.f) DIV f.header.size;
+        END;
+        dbu_go(f, r);
+        f.crec.next := 0;
+        f.crec.size := 0;
+        f.needupdate := TRUE;
+        dbu_alloc := r;
+END;
+
+FUNCTION dbu_size(VAR f : DBUFile; rec : LONGINT) : LONGINT;
+VAR     r : LONGINT;
+BEGIN
+        r := 0;
+        IF IsOpen(f.f) THEN BEGIN 
+                WHILE rec <> 0 DO BEGIN
+                        dbu_go(f, rec);
+                        Inc(r, f.crec.size);
+                        rec := f.crec.next;
                 END;
         END;
-        Seek(d.f^, page SHL 14);
-        Seek(d.idx^, page SHL 1);
+        dbu_size := r;
 END;
 
-PROCEDURE DBU_Reset(VAR d : DBUFile; VAR f, idx : BFile);
+PROCEDURE dbu_get(VAR f : DBUFile; rec : LONGINT; VAR b; size : WORD);
+VAR     p : PCHAR;
+        g : WORD;
 BEGIN
-        FillChar(d, SizeOf(DBUFile), #0);
-        d.f := @f;
-        d.idx := @idx;
-        IF (NOT EOF(d.f^)) AND (NOT EOF(d.idx^)) THEN BEGIN
-                Seek(d.idx^, 0);
-                d.first_free := ReadWord(d.idx^);
-        END ELSE DBU_ReWrite(d, f, idx);
-END;
-
-FUNCTION DBU_IsOpen(VAR d : DBUFile) : BOOLEAN;
-BEGIN
-        DBU_IsOpen := IsOpen(d.f^) AND IsOpen(d.idx^);
-END;
-
-PROCEDURE DBU_ReWrite(VAR d : DBUFile; VAR f, idx : BFile);
-BEGIN
-        FillChar(d, SizeOf(DBUFile), #0);
-        d.f := @f;
-        d.idx := @idx;
-
-        Seek(d.f^, 0);
-        L_Append(d);
-        Truncate(d.f^);
-
-        Seek(d.idx^, 0);
-        WriteWord(d.idx^, 0);
-        Truncate(d.idx^);
-END;
-
-PROCEDURE DBU_Close(VAR d : DBUFile);
-BEGIN
-        Seek(d.idx^, 0);
-        WriteWord(d.idx^, d.first_free);
-        Close(d.f^);
-        Close(d.idx^);
-END;
-
-FUNCTION DBU_Create(VAR d : DBUFile) : WORD;
-VAR     r : WORD;
-BEGIN
-        IF d.first_free = 0 THEN L_Seek(d, L_Size(d) + 1);
-        r := d.first_free;
-        L_Seek(d, r);
-        WriteWord(d.idx^, 0);
-        Seek(d.idx^, FilePos(d.idx^) - SizeOf(WORD));
-        DBU_Create := r;
-END;
-
-
-PROCEDURE DBU_Free(VAR d : DBUFile; h : WORD);
-VAR     next : WORD;
-BEGIN
-        WHILE h <> 0 DO BEGIN
-                next := GetWord(d.idx^, h SHL 1);
-                SetWord(d.idx^, h SHL 1, d.first_free);
-                d.first_free := h;
-                h := next;
+        IF NOT IsOpen(f.f) THEN EXIT;
+        p := @b;
+        WHILE (size <> 0) AND (rec <> 0) DO BEGIN
+                dbu_go(f, rec);
+                g := f.crec.size;
+                IF g > size THEN g := size;
+                Move(f.data[0], p[0], g);
+                Dec(size, g);
+                Inc(p, g);
+                rec := f.crec.next;
         END;
 END;
 
-FUNCTION next_page(VAR d : DBUFile; cpage : WORD) : WORD;
-VAR     npage : WORD;
+FUNCTION dbu_put(VAR f : DBUFile; VAR b; size : WORD) : LONGINT;
+VAR     r, pr, c : LONGINT;
+        p        : PCHAR;
+        g        : WORD;
+        bs       : WORD;
 BEGIN
-        Seek(d.idx^, cpage SHL 2);
-        npage := ReadWord(d.idx^);
-        IF npage = 0 THEN BEGIN
-                IF d.first_free = 0 THEN L_Seek(d, (L_Size(d) + 1));
-                npage := d.first_free;
-                Seek(d.idx^, d.first_free SHL 1);
-                d.first_free := ReadWord(d.idx^);
-                Seek(d.idx^, d.first_free SHL 1);
-                WriteWord(d.idx^, 0);
-                Seek(d.idx^, cpage SHL 1);
-                WriteWord(d.idx^, npage);
+        r := 0;
+        IF IsOpen(f.f) THEN BEGIN
+                p := @b;
+                bs := f.header.size - SizeOf(DBUFile);
+                r := dbu_alloc(f);
+                pr := r;
+                g := size;
+                IF g > bs THEN g := bs;
+                Move(p, f.data[0], g);
+                Dec(size, g);
+                Inc(p, g);
+                WHILE size <> 0 DO BEGIN
+                        c := dbu_alloc(f);
+                        dbu_go(f, pr);
+                        f.crec.next := c;
+                        f.needupdate := TRUE;
+                        dbu_go(f, c);
+                        g := size;
+                        IF g > bs THEN g := bs;
+                        Move(p, f.data[0], g);
+                        f.crec.size := g;
+                        Dec(size, g);
+                        Inc(p, g);
+                        f.needupdate := TRUE;
+                END;
         END;
-        next_page := npage;
-END;
-
-PROCEDURE DBU_Write(VAR d : DBUFile; h : WORD; ofs : DWORD; VAR mem; size : WORD);
-VAR     page : WORD;
-        pofs : WORD;
-        p    : PCHAR;
-        s    : WORD;
-BEGIN
-        page := ofs SHR 14;
-        pofs := ofs AND $3FFF;
-        p := @mem;
-        WHILE page <> 0  DO BEGIN
-                h := next_page(d, h);
-                Dec(page);
-        END;
-        WHILE size <> 0 DO BEGIN
-                L_Seek(d, h);
-                s := size;
-                IF s > (BLOCK_SIZE - pofs) THEN s := BLOCK_SIZE - pofs;
-                IF pofs <> 0 THEN Seek(d.f^, FilePos(d.f^) + pofs);
-                BlockWrite(d.f^, p[0], s);
-                pofs := 0;
-                Dec(size, s);
-                Inc(p, s);
-                h := next_page(d, h);
-        END;
-END;
-
-PROCEDURE DBU_Read(VAR d : DBUFile; h : WORD; ofs : DWORD; VAR mem; size : WORD);
-VAR     page : WORD;
-        pofs : WORD;
-        p    : PCHAR;
-        s    : WORD;
-        r    : WORD;
-BEGIN
-        page := ofs SHR 14;
-        pofs := ofs AND $3FFF;
-        p := @mem;
-        WHILE page <> 0  DO BEGIN
-                h := next_page(d, h);
-                Dec(page);
-        END;
-        WHILE size <> 0 DO BEGIN
-                L_Seek(d, h);
-                s := size;
-                IF s > (BLOCK_SIZE - pofs) THEN s := BLOCK_SIZE - pofs;
-                IF pofs <> 0 THEN Seek(d.f^, FilePos(d.f^) + pofs);
-                BlockRead(d.f^, p[0], s);
-                pofs := 0;
-                Dec(size, s);
-                Inc(p, s);
-                h := next_page(d, h);
-        END;
+        dbu_put := r;
 END;
 
 END.

@@ -91,8 +91,8 @@ END;
 
 PROCEDURE Assign (VAR f : BFILE; fname : STRING);
 PROCEDURE Reset (VAR f : BFILE);
-PROCEDURE Append (VAR f : BFILE);
 PROCEDURE ReWrite (VAR f : BFILE);
+PROCEDURE Append (VAR f : BFILE);
 
 { ReWriteTemp does not requre call to Assign }
 PROCEDURE ReWriteTemp (VAR f : BFILE);
