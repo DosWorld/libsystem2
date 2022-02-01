@@ -1295,8 +1295,9 @@ VAR     b : ARRAY[0..1] OF BYTE;
 BEGIN
         w := 0;
         IF BlockRead(f, b, SizeOf(b)) = 2 THEN BEGIN
-                w := b[0] AND $FF;
-                w := w OR ((b[1] AND $FF) SHL 8);
+                w := b[1];
+                w := w SHL 8;
+                w := w OR b[0];
         END;
         ReadWord := w;
 END;
@@ -1308,10 +1309,13 @@ VAR
 BEGIN
         dw := 0;
         IF BlockRead(f, b, SizeOf(b)) = 4 THEN BEGIN
-                dw := b[0] AND $FF;
-                dw := dw OR ((b[1] AND $FF) SHL 8);
-                dw := dw OR ((b[2] AND $FF) SHL 16);
-                dw := dw OR ((b[3] AND $FF) SHL 24);
+                dw := b[3] AND $FF;
+                dw := dw SHL 8;
+                dw := dw OR b[2];
+                dw := dw SHL 8;
+                dw := dw OR b[1];
+                dw := dw SHL 8;
+                dw := dw OR b[0];
         END;
         ReadDWord := dw;
 END;
@@ -1325,7 +1329,8 @@ PROCEDURE WriteWord(VAR f : BFILE; w : WORD);
 VAR     b : ARRAY[0..1] OF BYTE;
 BEGIN
         b[0] := w AND $FF;
-        b[1] := (w SHR 8) AND $FF;
+        w := w SHR 8;
+        b[1] := w AND $FF;
         BlockWrite(f, b, SizeOf(b));
 END;
 
@@ -1333,9 +1338,12 @@ PROCEDURE WriteDWord(VAR f : BFILE; dw : DWORD);
 VAR     b : ARRAY[0..3] OF BYTE;
 BEGIN
         b[0] := dw AND $FF;
-        b[1] := (dw SHR 8) AND $FF;
-        b[2] := (dw SHR 16) AND $FF;
-        b[3] := (dw SHR 24) AND $FF;
+        dw := dw SHR 8;
+        b[1] := dw AND $FF;
+        dw := dw SHR 8;
+        b[2] := dw AND $FF;
+        dw := dw SHR 8;
+        b[3] := dw AND $FF;
         BlockWrite(f, b, SizeOf(b));
 END;
 
