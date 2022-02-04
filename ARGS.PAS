@@ -127,7 +127,6 @@ UNIT Args;
          /s=<v>     Set stack size in KB. (default "8")
 
         Use /? for help.
-
   ========================================================================= }
 INTERFACE
 
@@ -502,7 +501,7 @@ END;
 PROCEDURE ArgsExitProc;FAR;
 BEGIN
         IF (ErrorAddr = NIL) AND (ExitCode <> 0) THEN BEGIN
-                WriteLn('Use /? for help.');
+                Write('Use /? for help.');
         END;
         exitProc := prevExitProc;
 END;

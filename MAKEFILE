@@ -36,3 +36,8 @@ STRBIN.TPP: STRBIN.PAS
 clean:
 	del *.TPU
 	del *.TPP
+	del *.BAK
+install: all
+	copy *.tpu ..\TPU\
+	copy *.tpp ..\TPU\
+
