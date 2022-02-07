@@ -174,6 +174,8 @@ USES {$IFDEF SYSMEM}SysMem,{$ENDIF}Dos;
 
 CONST
 
+STDIN  = 0;
+STDOUT = 1;
 STDERR = 2;
 
 SEEK_BEG = 0;
@@ -729,6 +731,7 @@ PROCEDURE ReWriteMemFile(VAR f : BFILE);
 VAR     s             : STRING;
 BEGIN
         FillChar(f, SizeOf(BFILE), #0);
+        IF use_temp THEN BEGIN ReWriteTemp(f); EXIT; END;
         GetMem(f.buf, SizeOf(BFILE_BUF));
         IF f.buf = NIL THEN EXIT;
         f.sysmem_ptr := sysmem_alloc;
@@ -738,9 +741,10 @@ BEGIN
                 str(LONGINT(f.sysmem_ptr), s);
                 f.filetype := MEM_FILE;
                 f.filename := 'MEM:FILE' + s + '.TMP';
+        END ELSE BEGIN
+                FreeMem(f.buf, SizeOf(BFILE_BUF)); f.buf := NIL;
+                ReWriteTemp(f);
         END;
-        IF NOT f.is_open THEN BEGIN FreeMem(f.buf, SizeOf(BFILE_BUF)); f.buf := NIL; END;
-        IF use_temp THEN ReWriteTemp(f);
 END;
 {$ENDIF}
 {$IFNDEF SYSMEM}

@@ -39,7 +39,7 @@ DBU_REC = RECORD
 END;
 
 PDBUFile = ^DBUFile;
-DBUFile=RECORD
+DBUFile = RECORD
         f          : BFILE;
         header     : DBU_REC;
         crec       : DBU_REC;
@@ -50,6 +50,7 @@ END;
 
 PROCEDURE dbu_reset(VAR f : DBUFile; fname : STRING; blk_size : WORD);
 PROCEDURE dbu_rewrite(VAR f : DBUFile; fname : STRING; blk_size : WORD);
+PROCEDURE dbu_rewrite_temp(VAR f : DBUFile; blk_size : WORD);
 PROCEDURE dbu_rewrite_memfile(VAR f : DBUFile; blk_size : WORD);
 
 FUNCTION dbu_isopen(VAR f : DBUFile) : BOOLEAN;
@@ -122,6 +123,21 @@ BEGIN
         FillChar(f, SizeOf(DBUFile), #0);
         Assign(f.f, fname);
         ReWrite(f.f);
+        IF IsOpen(f.f) THEN BEGIN
+                f.header.next := 0;
+                f.header.size := blk_size;
+                GetMem(f.data, f.header.size - SizeOf(DBUFile));
+                FillChar(f.data[0], f.header.size - SizeOf(DBUFile), #0);
+                Seek(f.f, 0);
+                BlockWrite(f.f, f.header, SizeOf(DBU_REC));
+                BlockWrite(f.f, f.data[0], f.header.size - SizeOf(DBU_REC));
+        END;
+END;
+
+PROCEDURE dbu_rewrite_temp(VAR f : DBUFile; blk_size : WORD);
+BEGIN
+        FillChar(f, SizeOf(DBUFile), #0);
+        ReWriteTemp(f.f);
         IF IsOpen(f.f) THEN BEGIN
                 f.header.next := 0;
                 f.header.size := blk_size;
