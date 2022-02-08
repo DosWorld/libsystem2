@@ -170,7 +170,7 @@ FUNCTION GetFreeDosVer : PCHAR;
 
 IMPLEMENTATION
 
-USES {$IFDEF SYSMEM}SysMem,{$ENDIF}Dos;
+USES {$IFDEF SYSMEM}SysMem, QSort,{$ENDIF}Dos;
 
 CONST
 
@@ -196,6 +196,7 @@ SORT_PAGE = RECORD
         old        : WORD;
         buf_page   : DWORD;
 END;
+PSORT_PAGE_INFO = ^SORT_PAGE_INFO;
 SORT_PAGE_INFO = ARRAY[0 .. CACHE_PAGES_PER_FILE-1] OF SORT_PAGE;
 {$ENDIF}
 
@@ -1035,42 +1036,21 @@ BEGIN
 END;
 
 {$IFDEF SYSMEM}
-PROCEDURE bubbleSortCachePages(VAR info : SORT_PAGE_INFO; left, right : INTEGER);
-VAR     i, j : INTEGER;
-        temp : SORT_PAGE;
+PROCEDURE swapCachePage(info : POINTER; element1, element2 : WORD);FAR;
+VAR     t  : SORT_PAGE;
+        m  : PSORT_PAGE_INFO;
 BEGIN
-        FOR i := left TO right DO
-        FOR j := left TO right DO
-                IF info[i].buf_page < info[j].buf_page THEN BEGIN
-                        temp := info[i];
-                        info[i] := info[j];
-                        info[j] := temp;
-                END;
+        m := PSORT_PAGE_INFO(info);
+        t := m^[element1];
+        m^[element1] := m^[element2];
+        m^[element2] := t;
 END;
 
-PROCEDURE qSortCachePages(VAR info : SORT_PAGE_INFO; left, right : INTEGER);
-VAR
-        lower, upper, middle : INTEGER;
-        temp   : SORT_PAGE;
-        piviot : DWORD;
+FUNCTION cmpCachePage(info : POINTER; element1, element2 : WORD) : INTEGER;FAR;
+VAR     m  : PSORT_PAGE_INFO;
 BEGIN
-        lower := left;
-        upper := right;
-        middle:= (left + right) div 2;
-        piviot := info[middle].buf_page;
-        REPEAT
-                WHILE info[lower].buf_page < piviot DO Inc(lower);
-                WHILE piviot < info[upper].buf_page DO Dec(upper);
-                IF lower <= upper THEN BEGIN
-                        temp := info[lower];
-                        info[lower] := info[upper];
-                        info[upper] := temp;
-                        Inc(lower);
-                        Dec(upper);
-                END;
-        UNTIL lower > upper;
-        IF left < upper THEN qSortCachePages(info, left, upper);
-        IF lower < right THEN qSortCachePages(info, lower, right);
+        m := PSORT_PAGE_INFO(info);
+        cmpCachePage := m^[element1].buf_page - m^[element2].buf_page;
 END;
 
 PROCEDURE FlushCache(VAR f : BFILE);
@@ -1088,8 +1068,7 @@ BEGIN
                 Inc(i);
         END;
         IF scount = 0 THEN EXIT;
-        { bubbleSortCachePages(sort_info, 0, scount - 1); }
-        qSortCachePages(sort_info, 0, scount - 1);
+        Sort(@sort_info, 0, scount - 1, cmpCachePage, swapCachePage);
         i := 0;
         WHILE i < scount DO BEGIN
                 cpage := sort_info[i].old;
