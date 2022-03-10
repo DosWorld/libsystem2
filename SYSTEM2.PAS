@@ -710,7 +710,7 @@ VAR     tmp  : STRING;
         name : STRING[12];
         i    : INTEGER;
 BEGIN
-        IF f.is_open THEN EXIT;
+        FillChar(f, SizeOf(BFILE), #0);
         tmp := GetEnv('TMP');
         IF Length(tmp) = 0 THEN tmp := GetEnv('TEMP');
         IF Length(tmp) = 0 THEN tmp := GetEnv('HOME');
