@@ -162,8 +162,8 @@ PROCEDURE SetUseTempFiles(status : BOOLEAN);
 FUNCTION FileExists(s : STRING):BOOLEAN;
 PROCEDURE FileDelete(s : STRING);
 
-FUNCTION getCurrentDisk : BYTE;
-PROCEDURE setCurrentDisk(disk : BYTE);
+FUNCTION GetCurrentDisk : BYTE;
+PROCEDURE SetCurrentDisk(disk : BYTE);
 
 FUNCTION IsFreeDos : BOOLEAN;
 FUNCTION GetFreeDosVer : PCHAR;
@@ -1445,13 +1445,13 @@ BEGIN
         lErase;
 END;
 
-FUNCTION getCurrentDisk : BYTE;ASSEMBLER;
+FUNCTION GetCurrentDisk : BYTE;ASSEMBLER;
 ASM
         MOV  AH, $19
         INT  $21
 END;
 
-PROCEDURE setCurrentDisk(disk : BYTE);ASSEMBLER;
+PROCEDURE SetCurrentDisk(disk : BYTE);ASSEMBLER;
 ASM
         MOV  AH, $0e
         MOV  DL, disk
