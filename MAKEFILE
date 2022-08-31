@@ -1,59 +1,69 @@
 all : DOS DPMI
 
-DOS: SYSTEM2.TPU WINCB.TPU STRBIN.TPU ARGS.TPU DBU.TPU RC4.TPU ANSI.TPU QSORT.TPU
-DPMI: SYSTEM2.TPP WINCB.TPP STRBIN.TPP ARGS.TPP DBU.TPP RC4.TPP ANSI.TPP QSORT.TPP
+DOS: SYSTEM2.TPU WINCB.TPU STRBIN.TPU ARGS.TPU DBU.TPU RC4.TPU ANSI.TPU QSORT.TPU STR.TPU ARRAYS.TPU
+DPMI: SYSTEM2.TPP WINCB.TPP STRBIN.TPP ARGS.TPP DBU.TPP RC4.TPP ANSI.TPP QSORT.TPP STR.TPP ARRAYS.TPP
 
 SYSTEM2.TPU: SYSTEM2.PAS SYSEMS.PAS SYSXMS.PAS SYSMEM.PAS
-	tpc /m SYSTEM2.PAS
+        tpc /m SYSTEM2.PAS
 
 SYSTEM2.TPP: SYSTEM2.PAS SYSMEM.PAS
-	bpc /m /cp SYSTEM2.PAS
+        bpc /m /cp SYSTEM2.PAS
 
 QSORT.TPU: QSORT.PAS
-	tpc /m QSORT.PAS
+        tpc /m QSORT.PAS
 
 QSORT.TPP: QSORT.PAS
-	bpc /m /cp QSORT.PAS
+        bpc /m /cp QSORT.PAS
 
 WINCB.TPU: WINCB.PAS
-	tpc /m WINCB.PAS
+        tpc /m WINCB.PAS
 
 WINCB.TPP: WINCB.PAS
-	bpc /m /cp WINCB.PAS
+        bpc /m /cp WINCB.PAS
 
 ARGS.TPU: ARGS.PAS
-	tpc /m ARGS.PAS
+        tpc /m ARGS.PAS
 
 ARGS.TPP: ARGS.PAS
-	bpc /m /cp ARGS.PAS
+        bpc /m /cp ARGS.PAS
 
 ANSI.TPU: ANSI.PAS
-	tpc /m ANSI.PAS
+        tpc /m ANSI.PAS
 
 ANSI.TPP: ANSI.PAS
-	bpc /m /cp ANSI.PAS
+        bpc /m /cp ANSI.PAS
 
 DBU.TPU: DBU.PAS SYSTEM2.PAS
-	tpc /m DBU.PAS
+        tpc /m DBU.PAS
 
 DBU.TPP: DBU.PAS SYSTEM2.PAS
-	bpc /m /cp DBU.PAS
+        bpc /m /cp DBU.PAS
 
 RC4.TPU: RC4.PAS
-	tpc /m RC4.PAS
+        tpc /m RC4.PAS
 RC4.TPP: RC4.PAS
-	bpc /m /cp RC4.PAS
+        bpc /m /cp RC4.PAS
+
+STR.TPU: STR.PAS
+        tpc /m STR.PAS
+STR.TPP: STR.PAS
+        bpc /m /cp STR.PAS
 
 STRBIN.TPU: STRBIN.PAS
-	tpc /m STRBIN.PAS
+        tpc /m STRBIN.PAS
 STRBIN.TPP: STRBIN.PAS
-	bpc /m /cp STRBIN.PAS
+        bpc /m /cp STRBIN.PAS
+
+ARRAYS.TPU: ARRAYS.PAS STR.TPU
+        tpc /m ARRAYS.PAS
+ARRAYS.TPP: ARRAYS.PAS STR.TPP
+        bpc /m /cp ARRAYS.PAS
 
 clean:
-	del *.TPU
-	del *.TPP
-	del *.BAK
+        del *.TPU
+        del *.TPP
+        del *.BAK
 install: all
-	copy *.tpu ..\TPU\
-	copy *.tpp ..\TPU\
+        copy *.tpu ..\TPU\
+        copy *.tpp ..\TPU\
 
