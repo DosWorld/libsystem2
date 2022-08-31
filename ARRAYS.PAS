@@ -56,7 +56,7 @@ FUNCTION array_dim(arr : PARRAY; newsize : WORD) : BOOLEAN;
 PROCEDURE array_get(arr : PARRAY; idx : WORD; VAR value);
 PROCEDURE array_set(arr : PARRAY; idx : WORD; VAR value);
 FUNCTION array_size(arr : PARRAY) : WORD;
-
+FUNCTION array_max(arr : PARRAY) : WORD;
 
 FUNCTION dict_new(item_size : WORD) : PDICT;
 PROCEDURE dict_free(dictionary : PDICT);
@@ -68,6 +68,11 @@ PROCEDURE dict_set(dictionary : PDICT; name : STRING; VAR value);
 IMPLEMENTATION
 
 USES Str;
+
+FUNCTION array_max(arr : PARRAY) : WORD;
+BEGIN
+        array_max := 65535 DIV arr^.item_size;
+END;
 
 FUNCTION array_new(item_size : WORD) : PARRAY;
 VAR     r : PARRAY;
