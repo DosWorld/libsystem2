@@ -20,7 +20,7 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 }
-{$A+,I-,S-,R-,D-,L-,Q-,F-,G-,O-,B-}
+{$A-,I-,S-,R-,D-,L-,Q-,F-,G-,O-,B-}
 UNIT DBU;
 { =========================================================================
   This is unit implements dbu files (like a .dbt) - container for memo fields.
@@ -31,6 +31,7 @@ USES System2;
 
 CONST
 DBU_BLOCK_SIZE = 512;
+DBU_SIGN : STRING[3] = 'DBU';
 
 TYPE
 DBU_HDR = RECORD
@@ -51,6 +52,7 @@ DBUFile = RECORD
         crec       : DBU_REC;
         crecno     : LONGINT;
         needupdate : BOOLEAN;
+        rblk_size  : WORD;
         data       : PCHAR;
 END;
 
@@ -62,7 +64,8 @@ PROCEDURE dbu_rewrite_memfile(VAR f : DBUFile; blk_size : WORD);
 FUNCTION dbu_isopen(VAR f : DBUFile) : BOOLEAN;
 
 PROCEDURE dbu_get(VAR f : DBUFile; rec : LONGINT; VAR b; size : WORD);
-FUNCTION dbu_put(VAR f : DBUFile; VAR b; size : WORD) : LONGINT;
+FUNCTION dbu_add(VAR f : DBUFile; VAR b; size : WORD) : LONGINT;
+PROCEDURE dbu_put(VAR f : DBUFile; rec : LONGINT; VAR b; size : WORD);
 FUNCTION dbu_size(VAR f : DBUFile; rec : LONGINT) : LONGINT;
 
 PROCEDURE dbu_free(VAR f : DBUFile; rec : LONGINT);
@@ -71,14 +74,18 @@ PROCEDURE dbu_close(VAR f : DBUFile);
 
 IMPLEMENTATION
 
-CONST
-SIGN = 'DBU';
+FUNCTION norm_blk_size(blk_size : WORD) : WORD;
+BEGIN
+        blk_size := blk_size + SizeOf(DBU_REC);
+        IF blk_size < SizeOf(DBU_HDR) THEN blk_size := SizeOf(DBU_HDR);
+        norm_blk_size := blk_size;
+END;
 
 PROCEDURE dbu_load(VAR f : DBUFile);
 BEGIN
         Seek(f.f, f.crecno * f.header.size);
         BlockRead(f.f, f.crec, SizeOf(DBU_REC));
-        BlockRead(f.f, f.data[0], f.header.size - SizeOf(DBU_REC));
+        BlockRead(f.f, f.data[0], f.rblk_size);
         f.needupdate := FALSE;
 END;
 
@@ -87,7 +94,7 @@ BEGIN
         IF (f.needupdate) AND (f.crecno <> 0) THEN BEGIN
                 Seek(f.f, f.crecno * f.header.size);
                 BlockWrite(f.f, f.crec, SizeOf(DBU_REC));
-                BlockWrite(f.f, f.data[0], f.header.size - SizeOf(DBU_REC));
+                BlockWrite(f.f, f.data[0], f.rblk_size);
         END;
         f.needupdate := FALSE;
 END;
@@ -96,7 +103,7 @@ PROCEDURE dbu_go(VAR f : DBUFile; recno : LONGINT);
 BEGIN
         IF recno = f.crecno THEN EXIT;
         dbu_update(f);
-        FillChar(f.data[0], f.header.size - SizeOf(DBU_REC), #0);
+        FillChar(f.data[0], f.rblk_size, #0);
         f.crec.next := 0;
         f.crec.size := 0;
         f.crecno := recno;
@@ -104,26 +111,32 @@ BEGIN
 END;
 
 PROCEDURE dbu_reset(VAR f : DBUFile; fname : STRING; blk_size : WORD);
+VAR     rblk_size : WORD;
 BEGIN
         FillChar(f, SizeOf(DBUFile), #0);
         Assign(f.f, fname);
         Reset(f.f);
+        rblk_size := norm_blk_size(blk_size);
         IF NOT IsOpen(f.f) THEN dbu_rewrite(f, fname, blk_size)
-        ELSE IF SizeOf(DBU_REC) <> BlockRead(f.f, f.header, SizeOf(DBU_REC)) THEN BEGIN
+        ELSE IF SizeOf(DBU_HDR) <> BlockRead(f.f, f.header, SizeOf(DBU_HDR)) THEN BEGIN
                 Close(f.f);
                 dbu_rewrite(f, fname, blk_size);
+        END ELSE IF (f.header.sign = DBU_SIGN) AND (f.header.size = rblk_size) THEN BEGIN
+                f.rblk_size := f.header.size - SizeOf(DBU_REC);
+                GetMem(f.data, f.rblk_size);
+                FillChar(f.data[0], f.rblk_size, #0);
         END ELSE BEGIN
-                GetMem(f.data, blk_size - SizeOf(DBUFile));
-                FillChar(f.data[0], f.header.size - SizeOf(DBUFile), #0);
-                BlockWrite(f.f, f.data[0], f.header.size - SizeOf(DBU_REC));
+                Close(f.f);
+                dbu_rewrite(f, fname, blk_size);
         END;
 END;
 
 PROCEDURE _dbu_rewrite(VAR f : DBUFile);
 BEGIN
         IF IsOpen(f.f) THEN BEGIN
-                GetMem(f.data, f.header.size);
-                FillChar(f.data[0], f.header.size, #0);
+                f.header.sign := DBU_SIGN;
+                GetMem(f.data, f.rblk_size);
+                FillChar(f.data[0], f.rblk_size, #0);
                 Seek(f.f, 0);
                 BlockWrite(f.f, f.header, SizeOf(DBU_HDR));
                 BlockWrite(f.f, f.data[0], f.header.size - SizeOf(DBU_HDR));
@@ -135,8 +148,8 @@ BEGIN
         FillChar(f, SizeOf(DBUFile), #0);
         Assign(f.f, fname);
         ReWrite(f.f);
-        f.header.sign := SIGN;
-        f.header.size := blk_size;
+        f.header.size := norm_blk_size(blk_size);
+        f.rblk_size := f.header.size - SizeOf(DBU_REC);
         _dbu_rewrite(f);
 END;
 
@@ -144,8 +157,8 @@ PROCEDURE dbu_rewrite_temp(VAR f : DBUFile; blk_size : WORD);
 BEGIN
         FillChar(f, SizeOf(DBUFile), #0);
         ReWriteTemp(f.f);
-        f.header.sign := SIGN;
-        f.header.size := blk_size;
+        f.header.size := norm_blk_size(blk_size);
+        f.rblk_size := f.header.size - SizeOf(DBU_REC);
         _dbu_rewrite(f);
 END;
 
@@ -153,8 +166,8 @@ PROCEDURE dbu_rewrite_memfile(VAR f : DBUFile; blk_size : WORD);
 BEGIN
         FillChar(f, SizeOf(DBUFile), #0);
         ReWriteMemFile (f.f);
-        f.header.sign := SIGN;
-        f.header.size := blk_size;
+        f.header.size := norm_blk_size(blk_size);
+        f.rblk_size := f.header.size - SizeOf(DBU_REC);
         _dbu_rewrite(f);
 END;
 
@@ -168,11 +181,9 @@ BEGIN
         IF NOT IsOpen(f.f) THEN EXIT;
         dbu_update(f);
         Seek(f.f, 0);
-        FillChar(f.data[0], f.header.size, #0);
         BlockWrite(f.f, f.header, SizeOf(DBU_HDR));
-        BlockWrite(f.f, f.data[0], f.header.size - SizeOf(DBU_HDR));
         Close(f.f);
-        IF f.data <> NIL THEN FreeMem(f.data, f.header.size);
+        IF f.data <> NIL THEN FreeMem(f.data, f.rblk_size);
         FillChar(f, SizeOf(DBUFile), #0);
 END;
 
@@ -240,16 +251,14 @@ BEGIN
         END;
 END;
 
-FUNCTION dbu_put(VAR f : DBUFile; VAR b; size : WORD) : LONGINT;
+FUNCTION dbu_add(VAR f : DBUFile; VAR b; size : WORD) : LONGINT;
 VAR     root, prec, crec : LONGINT;
         p        : PCHAR;
         csize    : WORD;
-        blk_size : WORD;
 BEGIN
         root := 0;
         IF IsOpen(f.f) THEN BEGIN
                 p := @b;
-                blk_size := f.header.size - SizeOf(DBU_REC);
                 prec := 0;
                 WHILE size <> 0 DO BEGIN
                         crec := dbu_alloc(f);
@@ -264,7 +273,7 @@ BEGIN
                         prec := crec;
                         dbu_go(f, crec);
                         csize := size;
-                        IF csize > blk_size THEN csize := blk_size;
+                        IF csize > f.rblk_size THEN csize := f.rblk_size;
                         Move(p[0], f.data[0], csize);
                         f.crec.size := csize;
                         f.needupdate := TRUE;
@@ -272,7 +281,40 @@ BEGIN
                         Inc(p, csize);
                 END;
         END;
-        dbu_put := root;
+        dbu_add := root;
+END;
+
+PROCEDURE dbu_put(VAR f : DBUFile; rec : LONGINT; VAR b; size : WORD);
+VAR     prec, crec : LONGINT;
+        p          : PCHAR;
+        csize      : WORD;
+BEGIN
+        IF IsOpen(f.f) THEN BEGIN
+                dbu_go(f, rec);
+                dbu_free(f, f.crec.next);
+                dbu_free(f, rec);
+                crec := 0;
+                p := @b;
+                WHILE size <> 0 DO BEGIN
+                        prec := crec;
+                        crec := dbu_alloc(f);
+                        IF prec <> 0 THEN BEGIN
+                                dbu_go(f, prec);
+                                f.crec.next := crec;
+                                f.needupdate := TRUE;
+                        END;
+                        dbu_go(f, crec);
+                        f.crec.next := 0;
+
+                        csize := size;
+                        IF csize > f.rblk_size THEN csize := f.rblk_size;
+                        Move(p[0], f.data[0], csize);
+                        f.crec.size := csize;
+                        f.needupdate := TRUE;
+                        Dec(size, csize);
+                        Inc(p, csize);
+                END;
+        END;
 END;
 
 END.

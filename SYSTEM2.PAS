@@ -49,13 +49,22 @@ INTERFACE
 {$UNDEF SYSMEM}
 {$ENDIF}
 
-CONST CACHE_PAGES_PER_FILE = 32; { 512KB = 32*16K }
+{$IFDEF SYSMEM}USES EXms;{$ENDIF}
+
+CONST
+CACHE_PAGES_PER_FILE = 32; { 512KB = 32*16K }
+
+{$IFDEF SYSMEM}
+BFILE_BUF_SIZE = EXT_PAGE_SIZE;
+{$ENDIF}
+{$IFNDEF SYSMEM}
+BFILE_BUF_SIZE = $4000;
+{$ENDIF}
 
 TYPE
-
 TFILETYPE = (FS_FILE {$IFDEF SYSMEM}, MEM_FILE{$ENDIF} );
 DWORD = LONGINT;
-BFILE_BUF = ARRAY[0..16383] OF CHAR;
+BFILE_BUF = ARRAY[0..BFILE_BUF_SIZE - 1] OF CHAR;
 
 {$IFDEF SYSMEM}
 TCACHE_PAGE = RECORD
@@ -739,7 +748,7 @@ BEGIN
         f.is_open := f.sysmem_ptr <> NIL;
         f.has_cache := f.sysmem_ptr <> NIL;
         IF f.is_open THEN BEGIN
-                str(LONGINT(f.sysmem_ptr), s);
+                Str(LONGINT(f.sysmem_ptr), s);
                 f.filetype := MEM_FILE;
                 f.filename := 'MEM:FILE' + s + '.TMP';
         END ELSE BEGIN

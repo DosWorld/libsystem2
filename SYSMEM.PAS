@@ -26,8 +26,6 @@ UNIT SysMem;
 
 INTERFACE
 
-CONST   EXTMEM_BLOCK_SIZE = 16 * 1024;
-
 TYPE
 DWORD = LONGINT;
 
@@ -53,7 +51,8 @@ This unit could be used only with real-mode DOS !
 This unit could be used only with real-mode DOS !
 {$ENDIF}
 
-USES SysEms, SysXms;
+{USES SysEms, SysXms;}
+USES EXms;
 
 TYPE
 TMEMTYPE = (MT_NONE, MT_EMS, MT_XMS);
@@ -208,9 +207,9 @@ BEGIN
                         h := GetHandl(he^, blk_num, nnum);
                         IF h <> 0 THEN BEGIN
                                 IF memtype = MT_XMS THEN BEGIN
-                                        xms_copy(h, nnum, blk, XMS2DOS);
+                                        xms_copy(h, nnum, blk, EXT2DOS);
                                 END ELSE IF memtype = MT_EMS THEN BEGIN
-                                        ems_copy(h, nnum, blk, EMS2DOS);
+                                        ems_copy(h, nnum, blk, EXT2DOS);
                                 END;
                                 r := TRUE;
                         END;
@@ -233,9 +232,9 @@ BEGIN
                 ELSE IF Realloc(he^, blk_num + 1) THEN h := GetHandl(he^, blk_num, nnum);
                 IF h <> 0 THEN BEGIN
                         IF memtype = MT_XMS THEN BEGIN
-                                xms_copy(h, nnum, blk, DOS2XMS);
+                                xms_copy(h, nnum, blk, DOS2EXT);
                         END ELSE IF memtype = MT_EMS THEN BEGIN
-                                ems_copy(h, nnum, blk, DOS2EMS);
+                                ems_copy(h, nnum, blk, DOS2EXT);
                         END;
                         r := TRUE;
                 END;
