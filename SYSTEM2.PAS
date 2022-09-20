@@ -52,7 +52,7 @@ INTERFACE
 {$IFDEF SYSMEM}USES EXms;{$ENDIF}
 
 CONST
-CACHE_PAGES_PER_FILE = 32; { 512KB = 32*16K }
+CACHE_PAGES_PER_FILE = 4; { 64KB = 4*16K }
 
 {$IFDEF SYSMEM}
 BFILE_BUF_SIZE = EXT_PAGE_SIZE;
@@ -1500,8 +1500,7 @@ END;
 
 BEGIN
 {$IFDEF SYSMEM}
-        IF CACHE_PAGES_PER_FILE > 8 THEN default_cache_size := 8
-        ELSE default_cache_size := CACHE_PAGES_PER_FILE;
+        default_cache_size := CACHE_PAGES_PER_FILE;
 {$ENDIF
         Randomize;
 {

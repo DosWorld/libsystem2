@@ -185,12 +185,14 @@ BEGIN
         sysmem_avail := memtype IN [MT_EMS, MT_XMS];
 END;
 
-FUNCTION sysmem_alloc:POINTER;
+FUNCTION sysmem_alloc : POINTER;
 VAR     he : PSYSMEM_REC;
 BEGIN
         he := NIL;
-        IF memtype <> MT_NONE THEN GetMem(he, SizeOf(TSYSMEM_REC));
-        IF he <> NIL THEN FillChar(he^, SizeOf(TSYSMEM_REC), #0);
+        IF memtype <> MT_NONE THEN BEGIN
+                GetMem(he, SizeOf(TSYSMEM_REC));
+                IF he <> NIL THEN FillChar(he^, SizeOf(TSYSMEM_REC), #0);
+        END;
         sysmem_alloc := he;
 END;
 
@@ -203,14 +205,11 @@ BEGIN
         r := FALSE;
         IF p <> NIL THEN BEGIN
                 he := PSYSMEM_REC(p);
-                IF blk_num <= he^.size THEN BEGIN
+                IF blk_num < he^.size THEN BEGIN
                         h := GetHandl(he^, blk_num, nnum);
                         IF h <> 0 THEN BEGIN
-                                IF memtype = MT_XMS THEN BEGIN
-                                        xms_copy(h, nnum, blk, EXT2DOS);
-                                END ELSE IF memtype = MT_EMS THEN BEGIN
-                                        ems_copy(h, nnum, blk, EXT2DOS);
-                                END;
+                                IF memtype = MT_XMS THEN xms_copy(h, nnum, blk, EXT2DOS)
+                                ELSE IF memtype = MT_EMS THEN ems_copy(h, nnum, blk, EXT2DOS);
                                 r := TRUE;
                         END;
                 END;
@@ -227,15 +226,14 @@ BEGIN
         r := FALSE;
         IF p <> NIL THEN BEGIN
                 he := PSYSMEM_REC(p);
-                h := 0;
                 IF blk_num < he^.size THEN h := GetHandl(he^, blk_num, nnum)
-                ELSE IF Realloc(he^, blk_num + 1) THEN h := GetHandl(he^, blk_num, nnum);
+                ELSE IF Realloc(he^, blk_num + 1) THEN BEGIN
+                        h := GetHandl(he^, blk_num, nnum);
+                        he^.size := blk_num + 1;
+                END;
                 IF h <> 0 THEN BEGIN
-                        IF memtype = MT_XMS THEN BEGIN
-                                xms_copy(h, nnum, blk, DOS2EXT);
-                        END ELSE IF memtype = MT_EMS THEN BEGIN
-                                ems_copy(h, nnum, blk, DOS2EXT);
-                        END;
+                        IF memtype = MT_XMS THEN xms_copy(h, nnum, blk, DOS2EXT)
+                        ELSE IF memtype = MT_EMS THEN ems_copy(h, nnum, blk, DOS2EXT);
                         r := TRUE;
                 END;
         END;
@@ -266,8 +264,8 @@ BEGIN
 END;
 
 BEGIN
-                xms_installed := xms_check_driver;
-                IF ems_check_driver THEN ems_installed := ems_get_status = EMS_STATUS_OK;
-                IF xms_installed THEN memtype := MT_XMS
-                ELSE IF ems_installed THEN memtype := MT_EMS;
+        xms_installed := xms_check_driver;
+        IF ems_check_driver THEN ems_installed := ems_get_status = EMS_STATUS_OK;
+        IF xms_installed THEN memtype := MT_XMS
+        ELSE IF ems_installed THEN memtype := MT_EMS;
 END.

@@ -67,11 +67,14 @@ This unit could be used only with real-mode DOS !
 This unit could be used only with real-mode DOS !
 {$ENDIF}
 
-CONST   EMMDEVNAME    : STRING[8] = 'EMMXXXX0';
+CONST
+EMMDEVNAME    : STRING[8] = 'EMMXXXX0';
 
 TYPE
-EMSCOPYREC = RECORD
-        len      : LONGINT;
+DWORD = LONGINT;
+
+TEMSCOPYREC = RECORD
+        len      : DWORD;
         src_type : BYTE;
         src_hnd  : WORD;
         src_ofs  : WORD;
@@ -82,17 +85,17 @@ EMSCOPYREC = RECORD
         dst_seg  : WORD;
 END;
 
-XMSCOPYREC = RECORD
-        len      : LONGINT;
+TXMSCOPYREC = RECORD
+        len      : DWORD;
         src_hnd  : WORD;
-        src_ofs  : LONGINT;
+        src_ofs  : DWORD;
         dst_hnd  : WORD;
-        dst_ofs  : LONGINT;
+        dst_ofs  : DWORD;
 END;
 
-VAR     emsrec     : EMSCOPYREC;
+VAR     emsrec     : TEMSCOPYREC;
         xmshandler : POINTER;
-        xmsrec     : XMSCOPYREC;
+        xmsrec     : TXMSCOPYREC;
 
 { --- EMS -------------------------------------------------------- }
 
@@ -226,7 +229,7 @@ ASM
         XOR  AL, AL
 @ok:
 END;
-
+                        
 FUNCTION xms_get_handler : POINTER;ASSEMBLER;
 ASM
         PUSH ES
@@ -288,7 +291,7 @@ BEGIN
                 END;
         END;
 END;
-
+        
 FUNCTION _xms_realloc(handle : WORD; pcount : WORD) : BOOLEAN; ASSEMBLER;
 ASM
         MOV  AX, pcount
@@ -330,6 +333,12 @@ ASM
         SHR  AX, CL
 END;
 
+PROCEDURE BAD_XMS_CALL;
 BEGIN
-        IF xms_check_driver THEN xmshandler := xms_get_handler;
+        System.Writeln('Error in XMS call.');
+        Halt(255);
+END;
+
+BEGIN
+        IF xms_check_driver THEN xmshandler := xms_get_handler ELSE xmshandler := @BAD_XMS_CALL;
 END.
