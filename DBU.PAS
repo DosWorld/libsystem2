@@ -54,7 +54,6 @@ END;
 PROCEDURE dbu_reset(VAR f : DBUFile; fname : STRING; blk_size : WORD);
 PROCEDURE dbu_rewrite(VAR f : DBUFile; fname : STRING; blk_size : WORD);
 PROCEDURE dbu_rewrite_temp(VAR f : DBUFile; blk_size : WORD);
-PROCEDURE dbu_rewrite_memfile(VAR f : DBUFile; blk_size : WORD);
 
 FUNCTION dbu_isopen(VAR f : DBUFile) : BOOLEAN;
 
@@ -155,15 +154,6 @@ PROCEDURE dbu_rewrite_temp(VAR f : DBUFile; blk_size : WORD);
 BEGIN
         FillChar(f, SizeOf(DBUFile), #0);
         ReWriteTemp(f.f);
-        f.header.size := norm_blk_size(blk_size);
-        f.rblk_size := f.header.size - SizeOf(DBU_REC);
-        _dbu_rewrite(f);
-END;
-
-PROCEDURE dbu_rewrite_memfile(VAR f : DBUFile; blk_size : WORD);
-BEGIN
-        FillChar(f, SizeOf(DBUFile), #0);
-        ReWriteMemFile (f.f);
         f.header.size := norm_blk_size(blk_size);
         f.rblk_size := f.header.size - SizeOf(DBU_REC);
         _dbu_rewrite(f);

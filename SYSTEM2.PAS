@@ -30,10 +30,8 @@ UNIT System2;
 
   1. Long file names
   2. Buffered I/O (DOS memory, 16K per file).
-  3. Buffered I/O (EMS/XMS), up to 512 KB per file.
-  4. File in memory (EMS/XMS) up to 4G each.
-  5. Temporary files.
-  6. Quoted command-line parameters.
+  3. Temporary files.
+  4. Quoted command-line parameters.
 
   NOTE about 16K: This value became from EMS-page size,
   so please dont change it.
@@ -74,7 +72,7 @@ PROCEDURE Append (VAR f : BFILE);
 
 { ReWriteTemp does not requre call to Assign }
 PROCEDURE ReWriteTemp (VAR f : BFILE);
-PROCEDURE ReWriteMemFile(VAR f : BFILE);
+{ PROCEDURE ReWriteMemFile(VAR f : BFILE); }
 
 FUNCTION Eof (VAR f : BFILE) : BOOLEAN;
 PROCEDURE Flush (VAR f : BFILE);
