@@ -179,6 +179,7 @@ FUNCTION is_shift(flags : BYTE) : BOOLEAN;
 { --- Mouse ------------------------------------------------------ }
 
 CONST
+
 MOUSE_B1 = 1;
 MOUSE_B2 = 2;
 
@@ -192,10 +193,11 @@ FUNCTION mouse_avail : BOOLEAN;
 
 IMPLEMENTATION
 
-{ --- Keyboard ------------------------------------------------------ }
-
 VAR     have_ext_kb : BOOLEAN;
-VAR     have_122_kb : BOOLEAN;
+        have_122_kb : BOOLEAN;
+        mouse_present, mouse_state : BOOLEAN;
+
+{ --- Keyboard ------------------------------------------------------ }
 
 FUNCTION kbd_getkey : WORD;ASSEMBLER;
 ASM
@@ -286,21 +288,7 @@ BEGIN
         WHILE kbd_haskey DO kbd_getkey;
 END;
 
-PROCEDURE check;ASSEMBLER;
-ASM
-        mov        ax, $0900
-        int        $16
-        push       ax
-        and        al, $20
-        mov        have_ext_kb, al
-        pop        ax
-        and        al, $40
-        mov        have_122_kb, al
-END;
-
 { --- Mouse ------------------------------------------------------ }
-
-VAR     mouse_present, state : BOOLEAN;
 
 FUNCTION mouse_avail : BOOLEAN;ASSEMBLER;
 ASM
@@ -312,7 +300,7 @@ ASM
         mov       al, mouse_present
         or        al, al
         jz        @nomouse
-        mov       al, state
+        mov       al, mouse_state
 @nomouse:
 END;
 
@@ -324,7 +312,7 @@ ASM
         mov       ax, 1
         int       $33
         mov       al, 1
-        mov       state, al
+        mov       mouse_state, al
 @nomouse:
 END;
 
@@ -335,7 +323,7 @@ ASM
         jz        @nomouse
         mov       ax, 2
         xor       al, al
-        mov       state, al
+        mov       mouse_state, al
 @nomouse:
 END;
 
@@ -378,13 +366,19 @@ ASM
 END;
 
 BEGIN
-        have_ext_kb := FALSE;
-        have_122_kb := FALSE;
-        check;
 ASM
+{ check keyboard }
+        mov        ax, $0900
+        int        $16
+        push       ax
+        and        al, $20
+        mov        have_ext_kb, al
+        pop        ax
+        and        al, $40
+        mov        have_122_kb, al
+{ check mouse }
         xor       ax, ax
         int       $33
         mov       mouse_present, al
 END;
-
 END.
