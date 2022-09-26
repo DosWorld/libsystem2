@@ -394,14 +394,11 @@ BEGIN
 END;
 
 FUNCTION rtrim(s : STRING):STRING;
-VAR k, l : INTEGER;
 BEGIN
-        l := Length(s); k := l;
-        WHILE k > 0 DO BEGIN
-                IF s[k] > ' ' THEN BREAK;
-                Dec(k);
+        WHILE s[0] > #0 DO BEGIN
+                IF s[ORD(s[0])] > ' ' THEN BREAK;
+                Dec(s[0]);
         END;
-        IF k = 0 THEN s := '' ELSE IF k <> l THEN s[0] := CHR(k);
         rtrim := s;
 END;
 
