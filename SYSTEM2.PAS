@@ -895,23 +895,35 @@ BEGIN
 END;
 
 PROCEDURE ReadLn(VAR f : BFILE; VAR s : STRING);
-VAR     c   : CHAR;
+VAR     c           : CHAR;
+        cfrom, clen : integer;
+        cpos        : word;
+        ccount      : word;
+        p           : pchar;
 BEGIN
         c := #0;
         s[0] := #0;
         IF NOT f.is_open THEN EXIT;
         WHILE s[0] <> #255 DO BEGIN
-                WHILE f.buf_pos < f.buf_count DO BEGIN
-                        c := f.buf^[f.buf_pos];
-                        Inc(f.buf_pos);
+                cfrom := f.buf_pos;
+                cpos := f.buf_pos;
+                ccount := f.buf_count;
+                clen := 0;
+                p := @f.buf^[cpos];
+                WHILE (cpos < ccount) AND (ORD(s[0]) + clen <= 255) DO BEGIN
+                        c := p[0];
+                        Inc(p);
+                        Inc(cpos);
                         IF c <> #$0D THEN BEGIN
                                 IF c = #$0A THEN BREAK;
-                                Inc(s[0]);
-                                s[ORD(s[0])] := c;
+                                Inc(clen);
                         END;
                 END;
+                f.buf_pos := cpos;
+                Move(f.buf^[cfrom], s[ORD(s[0]) + 1], clen);
+                Inc(s[0], clen);
                 IF (c = #$0A) OR (s[0] = #255) THEN BREAK;
-                IF f.buf_pos = f.buf_count THEN BEGIN
+                IF cpos = ccount THEN BEGIN
                         SwitchPage(f, f.buf_page + 1);
                         IF f.ioresult <> 0 THEN BREAK;
                         f.buf_pos := 0;

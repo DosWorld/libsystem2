@@ -30,6 +30,7 @@ FUNCTION basename(s:STRING):STRING;
 FUNCTION getpathname(s:STRING):STRING;
 FUNCTION change_ext(s:STRING; new_ext:STRING):STRING;
 FUNCTION get_filename_ext(s:STRING):STRING;
+FUNCTION poschr(var s : string; c : CHAR) : INTEGER;
 
 FUNCTION strlen(p : PCHAR):WORD;
 PROCEDURE strcpy(dst, src : PCHAR);
@@ -536,6 +537,29 @@ BEGIN
         Inc(dest, l);
         dest[0] := #0;
         strpcopy := dest;
+END;
+
+FUNCTION poschr(var s : string; c : CHAR) : INTEGER;ASSEMBLER;
+ASM
+        push       ds
+        mov        ah, c
+        lds        si, s
+        mov        bx, -1
+        cld
+        lodsb
+        mov        cl, al
+@cont:
+        or         cl, cl
+        jz         @end;
+        lodsb
+        dec        cl
+        cmp        al, ah
+        jne        @cont
+        mov        bl, cl
+        xor        bh, bh
+@end:
+        mov        ax, bx
+        pop        ds
 END;
 
 END.
