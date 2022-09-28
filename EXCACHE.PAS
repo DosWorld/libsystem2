@@ -24,7 +24,7 @@ SOFTWARE.
 
 { Simple cache implementation }
 
-{$A+,I-,S-,R-,D+,L+,Q-,F-,G-,O-,B-}
+{$A+,I-,S-,R-,D-,L-,Q-,F-,G-,O-,B-}
 UNIT ExCache;
 
 INTERFACE
