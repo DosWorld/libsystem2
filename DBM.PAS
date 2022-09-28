@@ -89,7 +89,7 @@ BEGIN
         IF (f.needupdate) AND (f.crecno <> 0) THEN BEGIN
                 Seek(f.f, f.crecno * f.header.size);
                 BlockWrite(f.f, f.crec, SizeOf(DBM_REC));
-                BlockWrite(f.f, f.data[0], f.rblk_size);
+                BlockWrite(f.f, f.data^, f.rblk_size);
         END;
         f.needupdate := FALSE;
 END;
@@ -98,13 +98,13 @@ PROCEDURE dbm_go(VAR f : DBMFile; recno : LONGINT);
 BEGIN
         IF recno = f.crecno THEN EXIT;
         dbm_update(f);
-        FillChar(f.data[0], f.rblk_size, #0);
+        FillChar(f.data^, f.rblk_size, #0);
         f.crec.next := 0;
         f.crec.size := 0;
         f.crecno := recno;
         Seek(f.f, recno * f.header.size);
         BlockRead(f.f, f.crec, SizeOf(DBM_REC));
-        BlockRead(f.f, f.data[0], f.rblk_size);
+        BlockRead(f.f, f.data^, f.rblk_size);
 END;
 
 PROCEDURE dbm_reset(VAR f : DBMFile; fname : STRING; blk_size : WORD);
@@ -121,7 +121,7 @@ BEGIN
         END ELSE IF (f.header.sign = DBM_SIGN) AND (f.header.size = rblk_size) THEN BEGIN
                 f.rblk_size := f.header.size - SizeOf(DBM_REC);
                 GetMem(f.data, f.rblk_size);
-                FillChar(f.data[0], f.rblk_size, #0);
+                FillChar(f.data^, f.rblk_size, #0);
         END ELSE BEGIN
                 Close(f.f);
                 dbm_rewrite(f, fname, blk_size);
@@ -139,10 +139,10 @@ BEGIN
                 f.needupdate := FALSE;
                 FillChar(f.crec, SizeOf(DBM_REC), #0);
                 GetMem(f.data, f.rblk_size);
-                FillChar(f.data[0], f.rblk_size, #0);
+                FillChar(f.data^, f.rblk_size, #0);
                 Seek(f.f, 0);
                 BlockWrite(f.f, f.header, SizeOf(DBM_HDR));
-                BlockWrite(f.f, f.data[0], f.header.size - SizeOf(DBM_HDR));
+                BlockWrite(f.f, f.data^, f.header.size - SizeOf(DBM_HDR));
         END;
 END;
 
@@ -192,7 +192,7 @@ BEGIN
                 f.crec.size := 0;
                 f.needupdate := TRUE;
                 f.header.next := rec;
-                FillChar(f.data[0], f.rblk_size, #0);
+                FillChar(f.data^, f.rblk_size, #0);
                 rec := n;
         END;
 END;
@@ -239,7 +239,7 @@ BEGIN
                 dbm_go(f, rec);
                 g := f.crec.size;
                 IF g > size THEN g := size;
-                Move(f.data[0], p[0], g);
+                Move(f.data^, p^, g);
                 Dec(size, g);
                 Inc(p, g);
                 rec := f.crec.next;
@@ -265,9 +265,9 @@ BEGIN
                         END;
                         prec := crec;
                         dbm_go(f, crec);
-                        csize := size;
-                        IF csize > f.rblk_size THEN csize := f.rblk_size;
-                        Move(p[0], f.data[0], csize);
+                        csize := f.rblk_size;
+                        IF csize > size THEN csize := size;
+                        Move(p^, f.data^, csize);
                         f.crec.size := csize;
                         f.needupdate := TRUE;
                         Dec(size, csize);

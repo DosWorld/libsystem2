@@ -76,7 +76,7 @@ PROCEDURE dbb_update(VAR f : DBBFile);
 BEGIN
         IF (f.needupdate) AND (f.crecno <> 0) THEN BEGIN
                 Seek(f.f, DBB_HDR_SIZE + (f.crecno - 1) * f.header.size);
-                BlockWrite(f.f, f.data[0], f.header.size);
+                BlockWrite(f.f, f.data^, f.header.size);
         END;
         f.needupdate := FALSE;
 END;
@@ -85,10 +85,10 @@ PROCEDURE dbb_go(VAR f : DBBFile; recno : LONGINT);
 BEGIN
         IF recno = f.crecno THEN EXIT;
         dbb_update(f);
-        FillChar(f.data[0], f.header.size, #0);
+        FillChar(f.data^, f.header.size, #0);
         f.crecno := recno;
         Seek(f.f, DBB_HDR_SIZE + (recno - 1) * f.header.size);
-        BlockRead(f.f, f.data[0], f.header.size);
+        BlockRead(f.f, f.data^, f.header.size);
 END;
 
 PROCEDURE dbb_reset(VAR f : DBBFile; fname : STRING; blk_size : WORD);
@@ -107,7 +107,7 @@ BEGIN
         END;
         IF (f.header.sign = DBB_SIGN) AND (f.header.size = blk_size) THEN BEGIN
                 GetMem(f.data, f.header.size);
-                FillChar(f.data[0], f.header.size, #0);
+                FillChar(f.data^, f.header.size, #0);
         END ELSE BEGIN
                 Close(f.f);
                 dbb_rewrite(f, fname, blk_size);
@@ -125,7 +125,7 @@ BEGIN
                 f.crecno := 0;
                 f.needupdate := FALSE;
                 GetMem(f.data, f.header.size);
-                FillChar(f.data[0], f.header.size, #0);
+                FillChar(f.data^, f.header.size, #0);
                 Seek(f.f, 0);
                 BlockWrite(f.f, f.header, DBB_HDR_SIZE);
         END;
@@ -167,7 +167,7 @@ BEGIN
         IF (NOT IsOpen(f.f)) OR (rec = 0) THEN EXIT;
         dbb_update(f);
         f.crecno := rec;
-        FillChar(f.data[0], f.header.size, #0);
+        FillChar(f.data^, f.header.size, #0);
         PLONGINT(f.data)^ := f.header.next;
         f.needupdate := TRUE;
         f.header.next := rec;
@@ -193,7 +193,7 @@ PROCEDURE dbb_get(VAR f : DBBFile; rec : LONGINT; VAR b);
 BEGIN
         IF (NOT IsOpen(f.f)) OR (rec = 0) THEN EXIT;
         dbb_go(f, rec);
-        Move(f.data[0], b, f.header.size);
+        Move(f.data^, b, f.header.size);
 END;
 
 FUNCTION dbb_add(VAR f : DBBFile; VAR b) : LONGINT;
@@ -203,7 +203,7 @@ BEGIN
         IF IsOpen(f.f) THEN BEGIN
                 res := dbb_alloc(f);
                 dbb_go(f, res);
-                Move(b, f.data[0], f.header.size);
+                Move(b, f.data^, f.header.size);
                 f.needupdate := TRUE;
         END;
         dbb_add := res;
@@ -213,7 +213,7 @@ PROCEDURE dbb_put(VAR f : DBBFile; rec : LONGINT; VAR b);
 BEGIN
         IF (NOT IsOpen(f.f)) OR (rec = 0) THEN EXIT;
         dbb_go(f, rec);
-        Move(b, f.data[0], f.header.size);
+        Move(b, f.data^, f.header.size);
         f.needupdate := TRUE;
 END;
 

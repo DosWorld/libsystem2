@@ -63,7 +63,7 @@ BEGIN
                 x := seed[i];
                 seed[i] := seed[j];
                 seed[j] := x;
-                src[0] := CHR(ORD(src[0]) XOR seed[(seed[i] + seed[j]) AND $FF]);
+                src^ := CHR(ORD(src^) XOR seed[(seed[i] + seed[j]) AND $FF]);
                 Inc(src);
                 Dec(size);
         END;
