@@ -120,7 +120,7 @@ BEGIN
         lookup_recno := r;
 END;
 
-FUNCTION lookup_free(c : PEXCACHE) : INTEGER;
+PROCEDURE lookup_free(c : PEXCACHE);
 VAR     i, r : INTEGER;
 BEGIN
         r := c^.size;
@@ -132,7 +132,7 @@ BEGIN
                 END;
                 Inc(i);
         END;
-        lookup_free := r;
+        make_top(c, r);
 END;
 
 FUNCTION excache_get(c : PEXCACHE; recno : LONGINT; VAR b; VAR count : WORD) : BOOLEAN;
@@ -155,7 +155,7 @@ BEGIN
         IF c = NIL THEN excache_put := FALSE
         ELSE IF c^.h = 0 THEN excache_put := FALSE
         ELSE BEGIN
-                IF NOT lookup_recno(c, recno) THEN make_top(c, lookup_free(c));
+                IF NOT lookup_recno(c, recno) THEN lookup_free(c);
                 c^.items[1].recno := recno;
                 c^.items[1].count := count;
                 c^.items[1].is_busy := TRUE;

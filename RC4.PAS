@@ -29,7 +29,7 @@ TYPE
 RC4_SEED = ARRAY[0..255] OF BYTE;
 
 PROCEDURE rc4_init(VAR seed : RC4_SEED; password : STRING);
-PROCEDURE rc4_crypt(VAR seed : RC4_SEED; src : PCHAR; size : WORD);
+PROCEDURE rc4_crypt(VAR seed : RC4_SEED; VAR buf; size : WORD);
 
 IMPLEMENTATION
 
@@ -49,12 +49,14 @@ BEGIN
         END;
 END;
 
-PROCEDURE rc4_crypt(VAR seed : RC4_SEED; src : PCHAR; size : WORD);
+PROCEDURE rc4_crypt(VAR seed : RC4_SEED; VAR buf; size : WORD);
 VAR     i, j : INTEGER;
         x    : BYTE;
+        src  : PCHAR;
 BEGIN
         i := 0;
         j := 0;
+        src := @buf;
         WHILE size <> 0 DO BEGIN
                 Inc(i);
                 i := i AND $FF;

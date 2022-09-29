@@ -38,19 +38,11 @@ DBM_HDR = RECORD
         root       : LONGINT;
         size       : WORD;
 END;
-DBM_REC = RECORD
-        next       : LONGINT;
-        size       : WORD;
-END;
 
 DBMFile = RECORD
         f          : BFILE;
         header     : DBM_HDR;
-        crec       : DBM_REC;
-        crecno     : LONGINT;
-        needupdate : BOOLEAN;
         rblk_size  : WORD;
-        data       : PCHAR;
 END;
 
 PROCEDURE dbm_reset(VAR f : DBMFile; fname : STRING; blk_size : WORD);
@@ -75,36 +67,22 @@ IMPLEMENTATION
 
 CONST
 DBM_SIGN = $4D44;
+ADDED_DATA = SizeOf(LONGINT) + SizeOf(WORD);
 
 FUNCTION norm_blk_size(blk_size : WORD) : WORD;
 BEGIN
-        blk_size := blk_size + SizeOf(DBM_REC);
+        blk_size := blk_size + ADDED_DATA;
         IF blk_size < SizeOf(DBM_HDR) THEN blk_size := SizeOf(DBM_HDR);
         IF (blk_size AND 3) <> 0 THEN blk_size := ((blk_size SHR 2) + 1) SHL 2;
         norm_blk_size := blk_size;
 END;
 
-PROCEDURE dbm_update(VAR f : DBMFile);
+FUNCTION dbm_go(VAR f : DBMFile; recno : LONGINT) : LONGINT;
+VAR     r : LONGINT;
 BEGIN
-        IF (f.needupdate) AND (f.crecno <> 0) THEN BEGIN
-                Seek(f.f, f.crecno * f.header.size);
-                BlockWrite(f.f, f.crec, SizeOf(DBM_REC));
-                BlockWrite(f.f, f.data^, f.rblk_size);
-        END;
-        f.needupdate := FALSE;
-END;
-
-PROCEDURE dbm_go(VAR f : DBMFile; recno : LONGINT);
-BEGIN
-        IF recno = f.crecno THEN EXIT;
-        dbm_update(f);
-        { FillChar(f.data^, f.rblk_size, #0); }
-        f.crec.next := 0;
-        f.crec.size := 0;
-        f.crecno := recno;
-        Seek(f.f, recno * f.header.size);
-        BlockRead(f.f, f.crec, SizeOf(DBM_REC));
-        BlockRead(f.f, f.data^, f.rblk_size);
+        r := recno * f.header.size;
+        Seek(f.f, r);
+        dbm_go := r;
 END;
 
 PROCEDURE dbm_reset(VAR f : DBMFile; fname : STRING; blk_size : WORD);
@@ -119,9 +97,7 @@ BEGIN
                 Close(f.f);
                 dbm_rewrite(f, fname, blk_size);
         END ELSE IF (f.header.sign = DBM_SIGN) AND (f.header.size = rblk_size) THEN BEGIN
-                f.rblk_size := f.header.size - SizeOf(DBM_REC);
-                GetMem(f.data, f.rblk_size);
-                FillChar(f.data^, f.rblk_size, #0);
+                f.rblk_size := f.header.size - ADDED_DATA;
         END ELSE BEGIN
                 Close(f.f);
                 dbm_rewrite(f, fname, blk_size);
@@ -129,20 +105,16 @@ BEGIN
 END;
 
 PROCEDURE _dbm_rewrite(VAR f : DBMFile);
+VAR     i : INTEGER;
 BEGIN
         IF IsOpen(f.f) THEN BEGIN
                 f.header.sign := DBM_SIGN;
                 f.header.next := 0;
                 f.header.records := 0;
                 f.header.root := 0;
-                f.crecno := 0;
-                f.needupdate := FALSE;
-                FillChar(f.crec, SizeOf(DBM_REC), #0);
-                GetMem(f.data, f.rblk_size);
-                FillChar(f.data^, f.rblk_size, #0);
                 Seek(f.f, 0);
                 BlockWrite(f.f, f.header, SizeOf(DBM_HDR));
-                BlockWrite(f.f, f.data^, f.header.size - SizeOf(DBM_HDR));
+                FOR i := 1 TO f.header.size - SizeOf(DBM_HDR) DO WriteByte(f.f, 0);
         END;
 END;
 
@@ -152,7 +124,7 @@ BEGIN
         Assign(f.f, fname);
         ReWrite(f.f);
         f.header.size := norm_blk_size(blk_size);
-        f.rblk_size := f.header.size - SizeOf(DBM_REC);
+        f.rblk_size := f.header.size - ADDED_DATA;
         _dbm_rewrite(f);
 END;
 
@@ -161,7 +133,7 @@ BEGIN
         FillChar(f, SizeOf(DBMFile), #0);
         ReWriteTemp(f.f);
         f.header.size := norm_blk_size(blk_size);
-        f.rblk_size := f.header.size - SizeOf(DBM_REC);
+        f.rblk_size := f.header.size - ADDED_DATA;
         _dbm_rewrite(f);
 END;
 
@@ -173,11 +145,9 @@ END;
 PROCEDURE dbm_close(VAR f : DBMFile);
 BEGIN
         IF NOT IsOpen(f.f) THEN EXIT;
-        dbm_update(f);
         Seek(f.f, 0);
         BlockWrite(f.f, f.header, SizeOf(DBM_HDR));
         Close(f.f);
-        IF f.data <> NIL THEN FreeMem(f.data, f.rblk_size);
         FillChar(f, SizeOf(DBMFile), #0);
 END;
 
@@ -187,12 +157,11 @@ BEGIN
         IF NOT IsOpen(f.f) THEN EXIT;
         WHILE rec <> 0 DO BEGIN
                 dbm_go(f, rec);
-                n := f.crec.next;
-                f.crec.next := f.header.next;
-                f.crec.size := 0;
-                f.needupdate := TRUE;
+                n := ReadDWord(f.f);
+                dbm_go(f, rec);
+                WriteDWord(f.f, f.header.next);
+                WriteWord(f.f, 0);
                 f.header.next := rec;
-                FillChar(f.data^, f.rblk_size, #0);
                 rec := n;
         END;
 END;
@@ -203,15 +172,12 @@ BEGIN
         IF f.header.next <> 0 THEN BEGIN
                 r := f.header.next;
                 dbm_go(f, r);
-                f.header.next := f.crec.next;
+                f.header.next := ReadDWord(f.f);
         END ELSE BEGIN
                 Inc(f.header.records);
                 r := f.header.records;
         END;
         dbm_go(f, r);
-        f.crec.next := 0;
-        f.crec.size := 0;
-        f.needupdate := TRUE;
         dbm_alloc := r;
 END;
 
@@ -222,8 +188,8 @@ BEGIN
         IF IsOpen(f.f) THEN BEGIN 
                 WHILE rec <> 0 DO BEGIN
                         dbm_go(f, rec);
-                        Inc(r, f.crec.size);
-                        rec := f.crec.next;
+                        rec := ReadDWord(f.f);
+                        Inc(r, ReadWord(f.f));
                 END;
         END;
         dbm_size := r;
@@ -237,12 +203,12 @@ BEGIN
         p := @b;
         WHILE (size <> 0) AND (rec <> 0) DO BEGIN
                 dbm_go(f, rec);
-                g := f.crec.size;
+                rec := ReadDWord(f.f);
+                g := ReadWord(f.f);
                 IF g > size THEN g := size;
-                Move(f.data^, p^, g);
+                BlockRead(f.f, p^, g);
                 Dec(size, g);
                 Inc(p, g);
-                rec := f.crec.next;
         END;
 END;
 
@@ -250,6 +216,7 @@ FUNCTION dbm_add(VAR f : DBMFile; VAR b; size : WORD) : LONGINT;
 VAR     root, prec, crec : LONGINT;
         p        : PCHAR;
         csize    : WORD;
+        i        : INTEGER;
 BEGIN
         root := 0;
         IF IsOpen(f.f) THEN BEGIN
@@ -260,18 +227,20 @@ BEGIN
                         IF root = 0 THEN root := crec;
                         IF prec <> 0 THEN BEGIN
                                 dbm_go(f, prec);
-                                f.crec.next := crec;
-                                f.needupdate := TRUE;
+                                WriteDWord(f.f, crec);
                         END;
-                        prec := crec;
-                        dbm_go(f, crec);
                         csize := f.rblk_size;
                         IF csize > size THEN csize := size;
-                        Move(p^, f.data^, csize);
-                        f.crec.size := csize;
-                        f.needupdate := TRUE;
+                        dbm_go(f, crec);
+                        WriteDWord(f.f, 0);
+                        WriteWord(f.f, csize);
+                        BlockWrite(f.f, p^, csize);
+                        IF f.rblk_size > csize THEN BEGIN
+                                FOR i := 1 TO f.rblk_size - csize DO WriteByte(f.f, 0);
+                        END;
                         Dec(size, csize);
                         Inc(p, csize);
+                        prec := crec;
                 END;
         END;
         dbm_add := root;
@@ -282,12 +251,11 @@ VAR     crec : LONGINT;
 BEGIN
         IF NOT IsOpen(f.f) THEN EXIT;
         dbm_go(f, rec);
-        crec := f.crec.next;
-        f.crec.next := 0;
-        f.crec.size := 0;
-        f.needupdate := TRUE;
-        dbm_free(f, crec);
+        crec := ReadDWord(f.f);
         dbm_go(f, rec);
+        WriteDWord(f.f, 0);
+        WriteWord(f.f, 0);
+        dbm_free(f, crec);
         dbm_free(f, rec);
         dbm_add(f, b, size);
 END;
