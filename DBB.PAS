@@ -85,7 +85,7 @@ PROCEDURE dbb_go(VAR f : DBBFile; recno : LONGINT);
 BEGIN
         IF recno = f.crecno THEN EXIT;
         dbb_update(f);
-        FillChar(f.data^, f.header.size, #0);
+        { FillChar(f.data^, f.header.size, #0); }
         f.crecno := recno;
         Seek(f.f, DBB_HDR_SIZE + (recno - 1) * f.header.size);
         BlockRead(f.f, f.data^, f.header.size);

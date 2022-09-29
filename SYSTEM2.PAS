@@ -75,7 +75,8 @@ BFILE = RECORD
         buf_pos     : WORD;
         fsize       : DWORD;
 {$IFDEF USE_CACHE}
-        cache       : POINTER;
+        rcache      : POINTER;
+        wcache      : POINTER;
 {$ENDIF}
         delonclose  : BOOLEAN;
 END;
@@ -155,7 +156,6 @@ IMPLEMENTATION
 USES Dos {$IFDEF USE_CACHE}, ExCache{$ENDIF};
 
 CONST
-
 STDIN  = 0;
 STDOUT = 1;
 STDERR = 2;
@@ -167,8 +167,12 @@ SEEK_END = 2;
 LN_STR : STRING[2] = #$0D + #$0A;
 SELFNAME : PCHAR = NIL;
 
-TYPE
+{$IFDEF USE_CACHE}
+READ_CACHE_SIZE  = 16;
+WRITE_CACHE_SIZE = 8;
+{$ENDIF}
 
+TYPE
 PSTRING = ^STRING;
 PWORD   = ^WORD;
 
@@ -608,12 +612,12 @@ BEGIN
         f.delonclose := FALSE;
         f.filetype := FS_FILE;
 {$IFDEF USE_CACHE}
-        IF f.is_open THEN f.cache := excache_create
-        ELSE BEGIN FreeMem(f.buf, SizeOf(BFILE_BUF)); f.buf := NIL; END;
+        IF f.is_open THEN BEGIN
+                f.rcache := excache_create(READ_CACHE_SIZE);
+                f.wcache := excache_create(WRITE_CACHE_SIZE);
+        END;
 {$ENDIF}
-{$IFDEF USE_CACHE}
         IF NOT f.is_open THEN BEGIN FreeMem(f.buf, SizeOf(BFILE_BUF)); f.buf := NIL; END;
-{$ENDIF}
 END;
 
 PROCEDURE Reset(VAR f : BFILE);
@@ -640,12 +644,12 @@ BEGIN
                 if res <> 0 THEN f.ioresult := 100;
         END;
 {$IFDEF USE_CACHE}
-        IF f.is_open THEN f.cache := excache_create
-        ELSE BEGIN FreeMem(f.buf, SizeOf(BFILE_BUF)); f.buf := NIL; END;
+        IF f.is_open THEN BEGIN
+                f.rcache := excache_create(READ_CACHE_SIZE);
+                f.wcache := excache_create(WRITE_CACHE_SIZE);
+        END;
 {$ENDIF}
-{$IFNDEF USE_CACHE}
         IF NOT f.is_open THEN BEGIN FreeMem(f.buf, SizeOf(BFILE_BUF)); f.buf := NIL; END;
-{$ENDIF}
 END;
 
 PROCEDURE Append (VAR f : BFILE);
@@ -681,7 +685,7 @@ END;
 PROCEDURE UpdateFileSize(VAR f : BFILE);
 VAR     ns : DWORD;
 BEGIN
-        ns := f.buf_page * SizeOf(BFILE_BUF) + f.buf_count;
+        ns := DWORD(f.buf_page) * SizeOf(BFILE_BUF) + f.buf_count;
         IF f.fsize < ns THEN f.fsize := ns;
 END;
 
@@ -699,29 +703,43 @@ END;
 
 PROCEDURE FsSwitchPage(VAR f : BFILE; new_page : DWORD);
 VAR     ns        : DWORD;
+        csize     : WORD;
 BEGIN
-        IF f.buf_update THEN BEGIN
-                ns := f.buf_page * SizeOf(BFILE_BUF) + f.buf_count;
-                IF f.fsize < ns THEN f.fsize := ns;
+        IF f.buf_update THEN UpdateFileSize(f);
+{$IFDEF USE_CACHE}
+        IF (f.wcache <> NIL) AND (f.rcache <> NIL) THEN BEGIN
+                IF f.buf_update THEN BEGIN
+                        excache_put(PEXCACHE(f.wcache), f.buf_page, f.buf^, f.buf_count);
+                        IF excache_is_full(PEXCACHE(f.wcache)) THEN BEGIN
+                                csize := excache_size(PEXCACHE(f.wcache));
+                                f.buf_page := PEXCACHE(f.wcache)^.items[csize].recno;
+                                excache_get(PEXCACHE(f.wcache), f.buf_page, f.buf^, f.buf_count);
+                                f.buf_update := TRUE;
+                        END ELSE f.buf_update := FALSE;
+                END ELSE excache_put(PEXCACHE(f.rcache), f.buf_page, f.buf^, f.buf_count);
         END;
+{$ENDIF}
         IF f.buf_update THEN BEGIN
                 lSeek(f.f, SEEK_BEG, f.buf_page * SizeOf(BFILE_BUF));
                 lWrite(f.f, f.buf^, f.buf_count);
                 f.buf_update := FALSE;
         END;
-{$IFDEF USE_CACHE}
-        excache_put(PEXCACHE(f.cache), f.buf_page, f.buf^, f.buf_count);
-{$ENDIF}
+
         f.buf_page := new_page;
         f.buf_pos := 0;
-        f.buf_update := FALSE;
 {$IFDEF USE_CACHE}
-        IF NOT excache_get(PEXCACHE(f.cache), f.buf_page, f.buf^, f.buf_count) THEN BEGIN
+        IF (f.rcache <> NIL) AND excache_get(PEXCACHE(f.rcache), f.buf_page, f.buf^, f.buf_count) THEN BEGIN
+                f.buf_update := FALSE;
+        END ELSE IF (f.wcache <> NIL) AND excache_get(PEXCACHE(f.wcache), f.buf_page, f.buf^, f.buf_count) THEN BEGIN
+                f.buf_update := TRUE;
+        END ELSE BEGIN
+                f.buf_update := FALSE;
                 lSeek(f.f, SEEK_BEG, f.buf_page * SizeOf(BFILE_BUF));
                 f.buf_count := lRead(f.f, f.buf^, SizeOf(BFILE_BUF));
         END;
 {$ENDIF}
 {$IFNDEF USE_CACHE}
+        f.buf_update := FALSE;
         lSeek(f.f, SEEK_BEG, f.buf_page * SizeOf(BFILE_BUF));
         f.buf_count := lRead(f.f, f.buf^, SizeOf(BFILE_BUF));
 {$ENDIF}
@@ -821,7 +839,7 @@ BEGIN
         IF NOT f.is_open THEN BEGIN
                 f.ioresult := 103;
                 FilePos := 0;
-        END ELSE FilePos := f.buf_page * SizeOf(BFILE_BUF) + f.buf_pos;
+        END ELSE FilePos := DWORD(f.buf_page) * SizeOf(BFILE_BUF) + f.buf_pos;
 END;
 
 FUNCTION FileSize(VAR f : BFILE) : DWORD;
@@ -869,17 +887,39 @@ BEGIN
 END;
 
 PROCEDURE Flush(VAR f : BFILE);
+VAR     i  : INTEGER;
+        bp : DWORD;
+        bc : WORD;
 BEGIN
         IF NOT f.is_open THEN EXIT;
         res := 0;
         f.ioresult := 0;
 
         IF f.filetype = FS_FILE THEN BEGIN
+{$IFNDEF USE_CACHE}
                 IF f.buf_update THEN BEGIN
                         lSeek(f.f, SEEK_BEG, f.buf_page * SizeOf(BFILE_BUF));
                         lWrite(f.f, f.buf^, f.buf_count);
                         f.buf_update := FALSE;
                 END;
+{$ENDIF}
+{$IFDEF USE_CACHE}
+                IF f.buf_update THEN BEGIN
+                        excache_put(PEXCACHE(f.wcache), f.buf_page, f.buf^, f.buf_count);
+                        f.buf_update := FALSE;
+                END;
+                excache_put(PEXCACHE(f.rcache), f.buf_page, f.buf^, f.buf_count);
+                FOR i := 1 TO excache_size(PEXCACHE(f.wcache)) DO BEGIN
+                        IF PEXCACHE(f.wcache)^.items[i].is_busy THEN BEGIN
+                                bp := PEXCACHE(f.wcache)^.items[i].recno;
+                                bc := PEXCACHE(f.wcache)^.items[i].count;
+                                excache_get(PEXCACHE(f.wcache), bp, f.buf^, bc);
+                                lSeek(f.f, SEEK_BEG, bp * SizeOf(BFILE_BUF));
+                                lWrite(f.f, f.buf^, bc);
+                        END;
+                END;
+                excache_get(PEXCACHE(f.rcache), f.buf_page, f.buf^, f.buf_count);
+{$ENDIF}
         END;
 END;
 
@@ -903,7 +943,8 @@ BEGIN
         IF NOT f.delonclose THEN Flush(f);
         IF f.filetype = FS_FILE THEN FsClose(f);
 {$IFDEF USE_CACHE}
-        excache_free(PEXCACHE(f.cache));
+        excache_free(PEXCACHE(f.rcache));
+        excache_free(PEXCACHE(f.wcache));
 {$ENDIF}
         IF f.buf <> NIL THEN FreeMem(f.buf, SizeOf(BFILE_BUF));
         FillChar(f, SizeOf(BFILE), #0);
@@ -970,7 +1011,8 @@ BEGIN
         f.fsize := f.buf_page * SizeOf(BFILE_BUF) + f.buf_pos;
         f.buf_count := f.buf_pos;
 {$IFDEF USE_CACHE}
-        excache_truncate(PEXCACHE(f.cache), f.buf_page, f.buf_count);
+        IF f.rcache <> NIL THEN excache_truncate(PEXCACHE(f.rcache), f.buf_page, f.buf_count);
+        IF f.wcache <> NIL THEN excache_truncate(PEXCACHE(f.wcache), f.buf_page, f.buf_count);
 {$ENDIF}
         res := 0;
         lSeek(f.f, SEEK_BEG, f.fsize);

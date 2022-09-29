@@ -74,7 +74,7 @@ PROCEDURE dbm_close(VAR f : DBMFile);
 IMPLEMENTATION
 
 CONST
-DBM_SIGN = $7744;
+DBM_SIGN = $4D44;
 
 FUNCTION norm_blk_size(blk_size : WORD) : WORD;
 BEGIN
@@ -98,7 +98,7 @@ PROCEDURE dbm_go(VAR f : DBMFile; recno : LONGINT);
 BEGIN
         IF recno = f.crecno THEN EXIT;
         dbm_update(f);
-        FillChar(f.data^, f.rblk_size, #0);
+        { FillChar(f.data^, f.rblk_size, #0); }
         f.crec.next := 0;
         f.crec.size := 0;
         f.crecno := recno;
