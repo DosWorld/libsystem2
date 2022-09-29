@@ -5,7 +5,7 @@
   It has support for:
 
   1. Long file names (LFN).
-  2. Buffered I/O (DOS memory, 16K per file).
+  2. Buffered I/O (per file: DOS memory - 16K and EMS/XMS - 128K).
   3. Temporary files.
   4. Quoted command-line parameters.
 
