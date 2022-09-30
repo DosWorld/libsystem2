@@ -19,7 +19,7 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. }
-{$A+,I-,S-,R-,D-,L-,Q-,F-,G-,O-,B-}
+{$A+,I-,S-,R-,D+,L+,Q-,F-,G-,O-,B-}
 UNIT System2;
 { =========================================================================
   Hi !
@@ -714,6 +714,7 @@ BEGIN
                                         csize := excache_Size(PEXCACHE(f.wcache));
                                         f.buf_page := PEXCACHE(f.wcache)^.items[csize].recno;
                                         excache_Get(PEXCACHE(f.wcache), f.buf_page, f.buf^, f.buf_count);
+                                        excache_Put(PEXCACHE(f.rcache), f.buf_page, f.buf^, f.buf_count);
                                         f.buf_update := TRUE;
                                 END ELSE f.buf_update := FALSE;
                         END;
@@ -774,7 +775,7 @@ BEGIN
                 IF delta = 0 THEN BEGIN
                         SwitchPage(f, f.buf_page + 1);
                         f.buf_pos := 0;
-                        { IF f.ioresult <> 0 THEN BREAK; }
+                        IF f.ioresult <> 0 THEN BREAK;
                         delta := SizeOf(BFILE_BUF);
                 END;
                 IF delta > count THEN delta := count;
@@ -804,7 +805,6 @@ BEGIN
                 delta := f.buf_count - f.buf_pos;
                 IF delta = 0 THEN BEGIN
                         SwitchPage(f, f.buf_page + 1);
-                        IF f.ioresult <> 0 THEN BREAK;
                         f.buf_pos := 0;
                         IF f.buf_count = 0 THEN BREAK;
                         delta := f.buf_count;
@@ -977,25 +977,25 @@ END;
 
 PROCEDURE ReadLn(VAR f : BFILE; VAR s : STRING);
 VAR     c           : CHAR;
-        p           : pchar;
+        p           : PCHAR;
+        tstr        : STRING;
 BEGIN
-        c := #0;
-        s[0] := #0;
         IF NOT f.is_open THEN EXIT;
-        WHILE TRUE DO BEGIN
+        tstr[0] := #0;
+        c := #0;
+        WHILE (c <> #$0A) AND (tstr[0] <> #255) DO BEGIN
                 p := @f.buf^[f.buf_pos];
                 c := #0;
-                WHILE (f.buf_pos < f.buf_count) AND (s[0] < #255) DO BEGIN
+                WHILE (f.buf_pos < f.buf_count) AND (tstr[0] < #255) DO BEGIN
                         c := p^;
                         Inc(p);
                         Inc(f.buf_pos);
                         IF c <> #$0D THEN BEGIN
                                 IF c = #$0A THEN BREAK;
-                                Inc(s[0]);
-                                s[ORD(s[0])] := c;
+                                Inc(tstr[0]);
+                                tstr[ORD(tstr[0])] := c;
                         END;
                 END;
-                IF (c = #$0A) OR (s[0] = #255) THEN BREAK;
                 IF f.buf_pos = f.buf_count THEN BEGIN
                         SwitchPage(f, f.buf_page + 1);
                         IF f.ioresult <> 0 THEN BREAK;
@@ -1003,6 +1003,7 @@ BEGIN
                         IF f.buf_count = 0 THEN BREAK;
                 END;
         END;
+        s := tstr;
 END;
 
 PROCEDURE FsTruncate(VAR f : BFILE);

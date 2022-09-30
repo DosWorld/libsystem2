@@ -19,7 +19,7 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. }
-{$A+,I-,S-,R-,D-,L-,Q-,F-,G-,O-,B-}
+{$A+,I-,S-,R-,D+,L+,Q-,F-,G-,O-,B-}
 UNIT ExCache;
 
 { Simple cache implementation }
@@ -27,12 +27,12 @@ UNIT ExCache;
 INTERFACE
 
 CONST
-EXCACHE_ITEM_COUNT = 8;
+EXCACHE_ITEM_COUNT = 32;
 
 TYPE
 TEXCACHE_ITEM = RECORD
         recno   : LONGINT;
-        page    : WORD;
+        page    : INTEGER;
         count   : WORD;
         is_busy : BOOLEAN;
 END;
@@ -40,12 +40,12 @@ END;
 PEXCACHE = ^TEXCACHE;
 TEXCACHE = RECORD
         h          : WORD;
-        size       : WORD;
-        allocated  : WORD;
+        size       : INTEGER;
+        allocated  : INTEGER;
         items      : ARRAY[1..EXCACHE_ITEM_COUNT] OF TEXCACHE_ITEM;
 END;
 
-FUNCTION excache_Create(size : WORD) : PEXCACHE;
+FUNCTION excache_Create(size : INTEGER) : PEXCACHE;
 PROCEDURE excache_Free(c : PEXCACHE);
 FUNCTION excache_IsFull(c : PEXCACHE) : BOOLEAN;
 
@@ -58,12 +58,13 @@ IMPLEMENTATION
 
 USES EXms;
 
-FUNCTION excache_Create(size : WORD) : PEXCACHE;
+FUNCTION excache_Create(size : INTEGER) : PEXCACHE;
 VAR     r    : PEXCACHE;
         h    : WORD;
 BEGIN
         r := NIL;
         IF exms_check_driver THEN BEGIN
+                IF size < 1 THEN size := EXCACHE_ITEM_COUNT;
                 IF size > EXCACHE_ITEM_COUNT THEN size := EXCACHE_ITEM_COUNT;
                 h := exms_malloc(size);
                 IF h <> 0 THEN BEGIN
@@ -85,14 +86,14 @@ BEGIN
         FreeMem(c, SizeOf(TEXCACHE));
 END;
 
-PROCEDURE make_top(c : PEXCACHE; page : WORD);
+PROCEDURE make_top(c : PEXCACHE; page : INTEGER);
 VAR     item : TEXCACHE_ITEM;
-        i    : WORD;
+        i    : INTEGER;
 BEGIN
         IF page = 1 THEN EXIT;
         item := c^.items[page];
         i := page;
-        WHILE i <> 1 DO BEGIN
+        WHILE i > 1 DO BEGIN
                 c^.items[i] := c^.items[i - 1];
                 Dec(i);
         END;

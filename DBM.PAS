@@ -19,7 +19,7 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. }
-{$A-,I-,S-,R-,D-,L-,Q-,F-,G-,O-,B-}
+{$A-,I-,S-,R-,D+,L+,Q-,F-,G-,O-,B-}
 UNIT DBM;
 { =========================================================================
   This is unit implements dbu files (like a .dbt) - container for memo fields
@@ -215,7 +215,7 @@ FUNCTION dbm_Add(VAR f : DBMFile; VAR b; size : WORD) : LONGINT;
 VAR     root, prec, crec : LONGINT;
         p        : PCHAR;
         csize    : WORD;
-        i        : INTEGER;
+        i        : WORD;
 BEGIN
         root := 0;
         IF IsOpen(f.f) THEN BEGIN
@@ -235,7 +235,15 @@ BEGIN
                         WriteWord(f.f, csize);
                         BlockWrite(f.f, p^, csize);
                         IF f.rblk_size > csize THEN BEGIN
-                                FOR i := 1 TO f.rblk_size - csize DO WriteByte(f.f, 0);
+                                i := f.rblk_size - csize;
+                                WHILE i >= SizeOf(LONGINT) DO BEGIN
+                                        WriteDWord(f.f, 0);
+                                        Dec(i, SizeOf(LONGINT));
+                                END;
+                                WHILE i >= 1 DO BEGIN
+                                        WriteByte(f.f, 0);
+                                        Dec(i, 1);
+                                END;
                         END;
                         Dec(size, csize);
                         Inc(p, csize);
