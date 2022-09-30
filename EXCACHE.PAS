@@ -1,5 +1,4 @@
-{
- MIT License
+{ MIT License
 
 Copyright (c) 2022 Viacheslav Komenda
 
@@ -19,18 +18,16 @@ FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
 AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
-}
-
-{ Simple cache implementation }
-
+SOFTWARE. }
 {$A+,I-,S-,R-,D-,L-,Q-,F-,G-,O-,B-}
 UNIT ExCache;
+
+{ Simple cache implementation }
 
 INTERFACE
 
 CONST
-EXCACHE_ITEM_COUNT = 16;
+EXCACHE_ITEM_COUNT = 8;
 
 TYPE
 TEXCACHE_ITEM = RECORD
@@ -42,26 +39,26 @@ END;
 
 PEXCACHE = ^TEXCACHE;
 TEXCACHE = RECORD
-        h     : WORD;
-        size  : WORD;
-        items : ARRAY[1..EXCACHE_ITEM_COUNT] OF TEXCACHE_ITEM;
+        h          : WORD;
+        size       : WORD;
+        allocated  : WORD;
+        items      : ARRAY[1..EXCACHE_ITEM_COUNT] OF TEXCACHE_ITEM;
 END;
 
-FUNCTION excache_create(size : WORD) : PEXCACHE;
-PROCEDURE excache_free(c : PEXCACHE);
-FUNCTION excache_is_full(c : PEXCACHE) : BOOLEAN;
+FUNCTION excache_Create(size : WORD) : PEXCACHE;
+PROCEDURE excache_Free(c : PEXCACHE);
+FUNCTION excache_IsFull(c : PEXCACHE) : BOOLEAN;
 
-FUNCTION excache_get(c : PEXCACHE; recno : LONGINT; VAR b; VAR count : WORD) : BOOLEAN;
-FUNCTION excache_put(c : PEXCACHE; recno : LONGINT; VAR b; count : WORD) : BOOLEAN;
-PROCEDURE excache_revoke(c : PEXCACHE; recno : LONGINT);
-PROCEDURE excache_truncate(c : PEXCACHE; recno : LONGINT; count : WORD);
-FUNCTION excache_size(c : PEXCACHE) : WORD;
+FUNCTION excache_Get(c : PEXCACHE; recno : LONGINT; VAR b; VAR count : WORD) : BOOLEAN;
+FUNCTION excache_Put(c : PEXCACHE; recno : LONGINT; VAR b; count : WORD) : BOOLEAN;
+PROCEDURE excache_Truncate(c : PEXCACHE; recno : LONGINT; count : WORD);
+FUNCTION excache_Size(c : PEXCACHE) : WORD;
 
 IMPLEMENTATION
 
 USES EXms;
 
-FUNCTION excache_create(size : WORD) : PEXCACHE;
+FUNCTION excache_Create(size : WORD) : PEXCACHE;
 VAR     r    : PEXCACHE;
         h    : WORD;
 BEGIN
@@ -77,10 +74,10 @@ BEGIN
                         FOR h := 1 TO r^.size DO r^.items[h].page := h - 1;
                 END;
         END;
-        excache_create := r;
+        excache_Create := r;
 END;
 
-PROCEDURE excache_free(c : PEXCACHE);
+PROCEDURE excache_Free(c : PEXCACHE);
 BEGIN
         IF c = NIL THEN EXIT;
         IF c^.h <> 0 THEN exms_free(c^.h);
@@ -90,7 +87,7 @@ END;
 
 PROCEDURE make_top(c : PEXCACHE; page : WORD);
 VAR     item : TEXCACHE_ITEM;
-        i    : INTEGER;
+        i    : WORD;
 BEGIN
         IF page = 1 THEN EXIT;
         item := c^.items[page];
@@ -135,7 +132,7 @@ BEGIN
         make_top(c, r);
 END;
 
-FUNCTION excache_get(c : PEXCACHE; recno : LONGINT; VAR b; VAR count : WORD) : BOOLEAN;
+FUNCTION excache_Get(c : PEXCACHE; recno : LONGINT; VAR b; VAR count : WORD) : BOOLEAN;
 VAR     r : BOOLEAN;
 BEGIN
         r := FALSE;
@@ -146,39 +143,27 @@ BEGIN
                 exms_copy(c^.h, c^.items[1].page, b, EXT2DOS);
                 count := c^.items[1].count;
                 c^.items[1].is_busy := FALSE;
+                Dec(c^.allocated);
         END;
-        excache_get := r;
+        excache_Get := r;
 END;
 
-FUNCTION excache_put(c : PEXCACHE; recno : LONGINT; VAR b; count : WORD) : BOOLEAN;
+FUNCTION excache_Put(c : PEXCACHE; recno : LONGINT; VAR b; count : WORD) : BOOLEAN;
 BEGIN
-        IF c = NIL THEN excache_put := FALSE
-        ELSE IF c^.h = 0 THEN excache_put := FALSE
+        IF c = NIL THEN excache_Put := FALSE
+        ELSE IF c^.h = 0 THEN excache_Put := FALSE
         ELSE BEGIN
-                IF NOT lookup_recno(c, recno) THEN lookup_free(c);
+                lookup_free(c);
+                IF NOT c^.items[1].is_busy THEN Inc(c^.allocated);
                 c^.items[1].recno := recno;
                 c^.items[1].count := count;
                 c^.items[1].is_busy := TRUE;
                 exms_copy(c^.h, c^.items[1].page, b, DOS2EXT);
-                excache_put := TRUE;
+                excache_Put := TRUE;
         END;
 END;
 
-PROCEDURE excache_revoke(c : PEXCACHE; recno : LONGINT);
-VAR     i  : INTEGER;
-BEGIN
-        IF c = NIL THEN EXIT;
-        IF c^.h = 0 THEN EXIT;
-        FOR i := 1 TO c^.size DO BEGIN
-                IF c^.items[i].is_busy AND (c^.items[i].recno = recno) THEN BEGIN
-                        c^.items[i].is_busy := FALSE;
-                        EXIT;
-                END;
-        END;
-        
-END;
-
-PROCEDURE excache_truncate(c : PEXCACHE; recno : LONGINT; count : WORD);
+PROCEDURE excache_Truncate(c : PEXCACHE; recno : LONGINT; count : WORD);
 VAR     i  : INTEGER;
 BEGIN
         IF c = NIL THEN EXIT;
@@ -188,30 +173,24 @@ BEGIN
         WHILE i <= c^.size DO BEGIN
                 IF c^.items[i].is_busy THEN BEGIN
                         IF c^.items[i].recno = recno THEN c^.items[i].count := count
-                        ELSE IF c^.items[i].recno > recno THEN c^.items[i].is_busy := FALSE;
+                        ELSE IF c^.items[i].recno > recno THEN BEGIN
+                                c^.items[i].is_busy := FALSE;
+                                Dec(c^.allocated);
+                        END;
                 END;
                 Inc(i);
         END;
 END;
 
-FUNCTION excache_is_full(c : PEXCACHE) : BOOLEAN;
-VAR     i : INTEGER;
-        r : BOOLEAN;
+FUNCTION excache_IsFull(c : PEXCACHE) : BOOLEAN;
 BEGIN
-        IF c <> NIL THEN BEGIN
-                r := TRUE;
-                i := 1;
-                WHILE (i <= c^.size) AND r DO BEGIN
-                        r := r AND c^.items[i].is_busy;
-                        Inc(i);
-                END;
-                excache_is_full := r;
-        END ELSE excache_is_full := TRUE;
+        IF c <> NIL THEN excache_IsFull := c^.allocated = c^.size
+        ELSE excache_IsFull := TRUE;
 END;
 
-FUNCTION excache_size(c : PEXCACHE) : WORD;
+FUNCTION excache_Size(c : PEXCACHE) : WORD;
 BEGIN
-        IF c = NIL THEN excache_size := 0 ELSE excache_size := c^.size;
+        IF c = NIL THEN excache_Size := 0 ELSE excache_Size := c^.size;
 END;
 
 END.

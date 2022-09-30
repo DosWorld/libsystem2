@@ -18,8 +18,7 @@ FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
 AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
-}
+SOFTWARE. }
 {$A-,I-,S-,R-,D-,L-,Q-,F-,G-,O-,B-}
 UNIT DBB;
 { =========================================================================
@@ -44,21 +43,21 @@ DBBFile = RECORD
         header     : DBB_HDR;
 END;
 
-PROCEDURE dbb_reset(VAR f : DBBFile; fname : STRING; blk_size : WORD);
-PROCEDURE dbb_rewrite(VAR f : DBBFile; fname : STRING; blk_size : WORD);
-PROCEDURE dbb_rewrite_temp(VAR f : DBBFile; blk_size : WORD);
+PROCEDURE dbb_Reset(VAR f : DBBFile; fname : STRING; blk_size : WORD);
+PROCEDURE dbb_ReWrite(VAR f : DBBFile; fname : STRING; blk_size : WORD);
+PROCEDURE dbb_ReWriteTemp(VAR f : DBBFile; blk_size : WORD);
 
-FUNCTION dbb_isopen(VAR f : DBBFile) : BOOLEAN;
+FUNCTION dbb_IsOpen(VAR f : DBBFile) : BOOLEAN;
 
-FUNCTION dbb_add(VAR f : DBBFile; VAR b) : LONGINT;
-PROCEDURE dbb_put(VAR f : DBBFile; rec : LONGINT; VAR b);
-PROCEDURE dbb_get(VAR f : DBBFile; rec : LONGINT; VAR b);
+FUNCTION dbb_Add(VAR f : DBBFile; VAR b) : LONGINT;
+PROCEDURE dbb_Put(VAR f : DBBFile; rec : LONGINT; VAR b);
+PROCEDURE dbb_Get(VAR f : DBBFile; rec : LONGINT; VAR b);
 
-PROCEDURE dbb_free(VAR f : DBBFile; rec : LONGINT);
-PROCEDURE dbb_close(VAR f : DBBFile);
+PROCEDURE dbb_Free(VAR f : DBBFile; rec : LONGINT);
+PROCEDURE dbb_Close(VAR f : DBBFile);
 
-FUNCTION dbb_getroot(VAR f : DBBFile):LONGINT;
-PROCEDURE dbb_setroot(VAR f : DBBFile; new_root : LONGINT);
+FUNCTION dbb_GetRoot(VAR f : DBBFile):LONGINT;
+PROCEDURE dbb_SetRoot(VAR f : DBBFile; new_root : LONGINT);
 
 IMPLEMENTATION
 
@@ -69,16 +68,17 @@ CONST
 DBB_SIGN     = $4244;
 DBB_HDR_SIZE = SizeOf(DBB_HDR);
 
-FUNCTION dbb_go(VAR f : DBBFile; recno : LONGINT) : LONGINT;
+FUNCTION _go(VAR f : DBBFile; recno : LONGINT) : LONGINT;
 VAR     r : LONGINT;
 BEGIN
         r := DBB_HDR_SIZE + (recno - 1) * f.header.size;
         Seek(f.f, DBB_HDR_SIZE + (recno - 1) * f.header.size);
-        dbb_go := r;
+        _go := r;
 END;
 
-PROCEDURE dbb_reset(VAR f : DBBFile; fname : STRING; blk_size : WORD);
+PROCEDURE dbb_Reset(VAR f : DBBFile; fname : STRING; blk_size : WORD);
 BEGIN
+        IF blk_size < SizeOf(LONGINT) THEN blk_size := SizeOf(LONGINT);
         FillChar(f, SizeOf(DBBFile), #0);
         Assign(f.f, fname);
         Reset(f.f);
@@ -88,17 +88,18 @@ BEGIN
         END;
         IF SizeOf(DBB_HDR) <> BlockRead(f.f, f.header, SizeOf(DBB_HDR)) THEN BEGIN
                 Close(f.f);
-                dbb_rewrite(f, fname, blk_size);
+                dbb_ReWrite(f, fname, blk_size);
                 EXIT;
         END;
         IF (f.header.sign <> DBB_SIGN) OR (f.header.size <> blk_size) THEN BEGIN
                 Close(f.f);
-                dbb_rewrite(f, fname, blk_size);
+                dbb_ReWrite(f, fname, blk_size);
         END;
 END;
 
-PROCEDURE _dbb_rewrite(VAR f : DBBFile; blk_size : WORD);
+PROCEDURE _rewrite(VAR f : DBBFile; blk_size : WORD);
 BEGIN
+        IF blk_size < SizeOf(LONGINT) THEN blk_size := SizeOf(LONGINT);
         IF IsOpen(f.f) THEN BEGIN
                 f.header.sign := DBB_SIGN;
                 f.header.next := 0;
@@ -110,27 +111,27 @@ BEGIN
         END;
 END;
 
-PROCEDURE dbb_rewrite(VAR f : DBBFile; fname : STRING; blk_size : WORD);
+PROCEDURE dbb_ReWrite(VAR f : DBBFile; fname : STRING; blk_size : WORD);
 BEGIN
         FillChar(f, SizeOf(DBBFile), #0);
         Assign(f.f, fname);
         ReWrite(f.f);
-        _dbb_rewrite(f, blk_size);
+        _rewrite(f, blk_size);
 END;
 
-PROCEDURE dbb_rewrite_temp(VAR f : DBBFile; blk_size : WORD);
+PROCEDURE dbb_ReWriteTemp(VAR f : DBBFile; blk_size : WORD);
 BEGIN
         FillChar(f, SizeOf(DBBFile), #0);
         ReWriteTemp(f.f);
-        _dbb_rewrite(f, blk_size);
+        _rewrite(f, blk_size);
 END;
 
-FUNCTION dbb_isopen(VAR f : DBBFile) : BOOLEAN;
+FUNCTION dbb_IsOpen(VAR f : DBBFile) : BOOLEAN;
 BEGIN
-        dbb_isopen := IsOpen(f.f);
+        dbb_IsOpen := IsOpen(f.f);
 END;
 
-PROCEDURE dbb_close(VAR f : DBBFile);
+PROCEDURE dbb_Close(VAR f : DBBFile);
 BEGIN
         IF NOT IsOpen(f.f) THEN EXIT;
         Seek(f.f, 0);
@@ -139,60 +140,60 @@ BEGIN
         FillChar(f, SizeOf(DBBFile), #0);
 END;
 
-PROCEDURE dbb_free(VAR f : DBBFile; rec : LONGINT);
+PROCEDURE dbb_Free(VAR f : DBBFile; rec : LONGINT);
 BEGIN
         IF (NOT IsOpen(f.f)) OR (rec = 0) THEN EXIT;
-        dbb_go(f, rec);
+        _go(f, rec);
         WriteDWord(f.f, f.header.next);
         f.header.next := rec;
 END;
 
-FUNCTION dbb_alloc(VAR f : DBBFile) : LONGINT;
+FUNCTION _alloc(VAR f : DBBFile) : LONGINT;
 VAR     r : LONGINT;
 BEGIN
         IF f.header.next <> 0 THEN BEGIN
                 r := f.header.next;
-                dbb_go(f, r);
+                _go(f, r);
                 f.header.next := ReadDWord(f.f);
         END ELSE BEGIN
                 Inc(f.header.records);
                 r := f.header.records;
         END;
-        dbb_alloc := r;
+        _alloc := r;
 END;
 
-PROCEDURE dbb_get(VAR f : DBBFile; rec : LONGINT; VAR b);
+PROCEDURE dbb_Get(VAR f : DBBFile; rec : LONGINT; VAR b);
 BEGIN
         IF (NOT IsOpen(f.f)) OR (rec = 0) THEN EXIT;
-        dbb_go(f, rec);
+        _go(f, rec);
         BlockRead(f.f, b, f.header.size);
 END;
 
-FUNCTION dbb_add(VAR f : DBBFile; VAR b) : LONGINT;
+FUNCTION dbb_Add(VAR f : DBBFile; VAR b) : LONGINT;
 VAR     res : LONGINT;
 BEGIN
         res := 0;
         IF IsOpen(f.f) THEN BEGIN
-                res := dbb_alloc(f);
-                dbb_go(f, res);
+                res := _alloc(f);
+                _go(f, res);
                 BlockWrite(f.f, b, f.header.size);
         END;
-        dbb_add := res;
+        dbb_Add := res;
 END;
 
-PROCEDURE dbb_put(VAR f : DBBFile; rec : LONGINT; VAR b);
+PROCEDURE dbb_Put(VAR f : DBBFile; rec : LONGINT; VAR b);
 BEGIN
         IF (NOT IsOpen(f.f)) OR (rec = 0) THEN EXIT;
-        dbb_go(f, rec);
+        _go(f, rec);
         BlockWrite(f.f, b, f.header.size);
 END;
 
-FUNCTION dbb_getroot(VAR f : DBBFile):LONGINT;
+FUNCTION dbb_GetRoot(VAR f : DBBFile):LONGINT;
 BEGIN
-        dbb_getroot := f.header.root;
+        dbb_GetRoot := f.header.root;
 END;
 
-PROCEDURE dbb_setroot(VAR f : DBBFile; new_root : LONGINT);
+PROCEDURE dbb_SetRoot(VAR f : DBBFile; new_root : LONGINT);
 BEGIN
         f.header.root := new_root;
 END;

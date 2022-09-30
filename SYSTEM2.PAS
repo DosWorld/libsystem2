@@ -1,4 +1,4 @@
-{  MIT License
+{ MIT License
 
 Copyright (c) 2022 Viacheslav Komenda
 
@@ -18,8 +18,7 @@ FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
 AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
-}
+SOFTWARE. }
 {$A+,I-,S-,R-,D-,L-,Q-,F-,G-,O-,B-}
 UNIT System2;
 { =========================================================================
@@ -53,6 +52,7 @@ INTERFACE
 {$IFDEF OS2}
         {$UNDEF USE_CACHE}
 {$ENDIF}
+
 CONST
 BFILE_BUF_SIZE = $4000;
 
@@ -168,7 +168,7 @@ LN_STR : STRING[2] = #$0D + #$0A;
 SELFNAME : PCHAR = NIL;
 
 {$IFDEF USE_CACHE}
-READ_CACHE_SIZE  = 16;
+READ_CACHE_SIZE  = 8;
 WRITE_CACHE_SIZE = 8;
 {$ENDIF}
 
@@ -709,14 +709,15 @@ BEGIN
 {$IFDEF USE_CACHE}
         IF (f.wcache <> NIL) AND (f.rcache <> NIL) THEN BEGIN
                 IF f.buf_update THEN BEGIN
-                        excache_put(PEXCACHE(f.wcache), f.buf_page, f.buf^, f.buf_count);
-                        IF excache_is_full(PEXCACHE(f.wcache)) THEN BEGIN
-                                csize := excache_size(PEXCACHE(f.wcache));
-                                f.buf_page := PEXCACHE(f.wcache)^.items[csize].recno;
-                                excache_get(PEXCACHE(f.wcache), f.buf_page, f.buf^, f.buf_count);
-                                f.buf_update := TRUE;
-                        END ELSE f.buf_update := FALSE;
-                END ELSE excache_put(PEXCACHE(f.rcache), f.buf_page, f.buf^, f.buf_count);
+                        IF excache_Put(PEXCACHE(f.wcache), f.buf_page, f.buf^, f.buf_count) THEN BEGIN
+                                IF excache_IsFull(PEXCACHE(f.wcache)) THEN BEGIN
+                                        csize := excache_Size(PEXCACHE(f.wcache));
+                                        f.buf_page := PEXCACHE(f.wcache)^.items[csize].recno;
+                                        excache_Get(PEXCACHE(f.wcache), f.buf_page, f.buf^, f.buf_count);
+                                        f.buf_update := TRUE;
+                                END ELSE f.buf_update := FALSE;
+                        END;
+                END ELSE excache_Put(PEXCACHE(f.rcache), f.buf_page, f.buf^, f.buf_count);
         END;
 {$ENDIF}
         IF f.buf_update THEN BEGIN
@@ -728,9 +729,9 @@ BEGIN
         f.buf_page := new_page;
         f.buf_pos := 0;
 {$IFDEF USE_CACHE}
-        IF (f.rcache <> NIL) AND excache_get(PEXCACHE(f.rcache), f.buf_page, f.buf^, f.buf_count) THEN BEGIN
+        IF (f.rcache <> NIL) AND excache_Get(PEXCACHE(f.rcache), f.buf_page, f.buf^, f.buf_count) THEN BEGIN
                 f.buf_update := FALSE;
-        END ELSE IF (f.wcache <> NIL) AND excache_get(PEXCACHE(f.wcache), f.buf_page, f.buf^, f.buf_count) THEN BEGIN
+        END ELSE IF (f.wcache <> NIL) AND excache_Get(PEXCACHE(f.wcache), f.buf_page, f.buf^, f.buf_count) THEN BEGIN
                 f.buf_update := TRUE;
         END ELSE BEGIN
                 f.buf_update := FALSE;
@@ -887,27 +888,28 @@ BEGIN
 END;
 
 PROCEDURE Flush(VAR f : BFILE);
-VAR     i  : INTEGER;
-        bp : DWORD;
-        bc : WORD;
+VAR     i        : INTEGER;
+        bp       : DWORD;
+        bc       : WORD;
+        buf_used : BOOLEAN;
 BEGIN
         IF NOT f.is_open THEN EXIT;
         res := 0;
         f.ioresult := 0;
 
         IF f.filetype = FS_FILE THEN BEGIN
-{$IFNDEF USE_CACHE}
+{$IFDEF USE_CACHE}
+                IF f.buf_update THEN BEGIN
+                        f.buf_update := NOT excache_put(PEXCACHE(f.wcache), f.buf_page, f.buf^, f.buf_count);
+                END;
+{$ENDIF}
                 IF f.buf_update THEN BEGIN
                         lSeek(f.f, SEEK_BEG, f.buf_page * SizeOf(BFILE_BUF));
                         lWrite(f.f, f.buf^, f.buf_count);
                         f.buf_update := FALSE;
                 END;
-{$ENDIF}
 {$IFDEF USE_CACHE}
-                IF f.buf_update THEN BEGIN
-                        excache_put(PEXCACHE(f.wcache), f.buf_page, f.buf^, f.buf_count);
-                        f.buf_update := FALSE;
-                END;
+                buf_used := FALSE;
                 excache_put(PEXCACHE(f.rcache), f.buf_page, f.buf^, f.buf_count);
                 FOR i := 1 TO excache_size(PEXCACHE(f.wcache)) DO BEGIN
                         IF PEXCACHE(f.wcache)^.items[i].is_busy THEN BEGIN
@@ -916,9 +918,15 @@ BEGIN
                                 excache_get(PEXCACHE(f.wcache), bp, f.buf^, bc);
                                 lSeek(f.f, SEEK_BEG, bp * SizeOf(BFILE_BUF));
                                 lWrite(f.f, f.buf^, bc);
+                                buf_used := TRUE;
                         END;
                 END;
-                excache_get(PEXCACHE(f.rcache), f.buf_page, f.buf^, f.buf_count);
+                IF NOT excache_get(PEXCACHE(f.rcache), f.buf_page, f.buf^, f.buf_count) THEN BEGIN
+                        IF buf_used THEN BEGIN
+                                lSeek(f.f, SEEK_BEG, f.buf_page * SizeOf(BFILE_BUF));
+                                lRead(f.f, f.buf^, f.buf_count);
+                        END;
+                END;
 {$ENDIF}
         END;
 END;
@@ -969,34 +977,26 @@ END;
 
 PROCEDURE ReadLn(VAR f : BFILE; VAR s : STRING);
 VAR     c           : CHAR;
-        cfrom, clen : integer;
-        cpos        : word;
-        ccount      : word;
         p           : pchar;
 BEGIN
         c := #0;
         s[0] := #0;
         IF NOT f.is_open THEN EXIT;
-        WHILE s[0] <> #255 DO BEGIN
-                cfrom := f.buf_pos;
-                cpos := f.buf_pos;
-                ccount := f.buf_count;
-                clen := 0;
-                p := @f.buf^[cpos];
-                WHILE (cpos < ccount) AND (ORD(s[0]) + clen <= 255) DO BEGIN
-                        c := p[0];
+        WHILE TRUE DO BEGIN
+                p := @f.buf^[f.buf_pos];
+                c := #0;
+                WHILE (f.buf_pos < f.buf_count) AND (s[0] < #255) DO BEGIN
+                        c := p^;
                         Inc(p);
-                        Inc(cpos);
+                        Inc(f.buf_pos);
                         IF c <> #$0D THEN BEGIN
                                 IF c = #$0A THEN BREAK;
-                                Inc(clen);
+                                Inc(s[0]);
+                                s[ORD(s[0])] := c;
                         END;
                 END;
-                f.buf_pos := cpos;
-                Move(f.buf^[cfrom], s[ORD(s[0]) + 1], clen);
-                Inc(s[0], clen);
                 IF (c = #$0A) OR (s[0] = #255) THEN BREAK;
-                IF cpos = ccount THEN BEGIN
+                IF f.buf_pos = f.buf_count THEN BEGIN
                         SwitchPage(f, f.buf_page + 1);
                         IF f.ioresult <> 0 THEN BREAK;
                         f.buf_pos := 0;

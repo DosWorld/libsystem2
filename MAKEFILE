@@ -4,70 +4,70 @@ DOS: SYSTEM2.TPU WINCB.TPU STRBIN.TPU ARGS.TPU DBM.TPU DBB.TPU RC4.TPU ANSI.TPU 
 DPMI: SYSTEM2.TPP WINCB.TPP STRBIN.TPP ARGS.TPP DBM.TPP DBB.TPP RC4.TPP ANSI.TPP QSORT.TPP STR.TPP ARRAYS.TPP KMINPUT.TPP
 
 SYSTEM2.TPU: SYSTEM2.PAS EXMS.PAS EXCACHE.PAS
-        tpc /m SYSTEM2.PAS
+        tpc /b SYSTEM2.PAS
 
 SYSTEM2.TPP: SYSTEM2.PAS
-        bpc /m /cp SYSTEM2.PAS
+        bpc /b /cp SYSTEM2.PAS
 
 QSORT.TPU: QSORT.PAS
-        tpc /m QSORT.PAS
+        tpc /b QSORT.PAS
 
 QSORT.TPP: QSORT.PAS
-        bpc /m /cp QSORT.PAS
+        bpc /b /cp QSORT.PAS
 
 WINCB.TPU: WINCB.PAS
-        tpc /m WINCB.PAS
+        tpc /b WINCB.PAS
 
 WINCB.TPP: WINCB.PAS
-        bpc /m /cp WINCB.PAS
+        bpc /b /cp WINCB.PAS
 
 ARGS.TPU: ARGS.PAS
-        tpc /m ARGS.PAS
+        tpc /b ARGS.PAS
 
 ARGS.TPP: ARGS.PAS
-        bpc /m /cp ARGS.PAS
+        bpc /b /cp ARGS.PAS
 
 ANSI.TPU: ANSI.PAS
-        tpc /m ANSI.PAS
+        tpc /b ANSI.PAS
 
 ANSI.TPP: ANSI.PAS
-        bpc /m /cp ANSI.PAS
+        bpc /b /cp ANSI.PAS
 
 DBM.TPU: DBM.PAS SYSTEM2.PAS
-        tpc /m DBM.PAS
+        tpc /b DBM.PAS
 
 DBM.TPP: DBM.PAS SYSTEM2.PAS
-        bpc /m /cp DBM.PAS
+        bpc /b /cp DBM.PAS
 
 RC4.TPU: RC4.PAS
-        tpc /m RC4.PAS
+        tpc /b RC4.PAS
 RC4.TPP: RC4.PAS
-        bpc /m /cp RC4.PAS
+        bpc /b /cp RC4.PAS
 
 STR.TPU: STR.PAS
-        tpc /m STR.PAS
+        tpc /b STR.PAS
 STR.TPP: STR.PAS
-        bpc /m /cp STR.PAS
+        bpc /b /cp STR.PAS
 
 STRBIN.TPU: STRBIN.PAS
-        tpc /m STRBIN.PAS
+        tpc /b STRBIN.PAS
 STRBIN.TPP: STRBIN.PAS
-        bpc /m /cp STRBIN.PAS
+        bpc /b /cp STRBIN.PAS
 
 ARRAYS.TPU: ARRAYS.PAS STR.TPU
-        tpc /m ARRAYS.PAS
+        tpc /b ARRAYS.PAS
 ARRAYS.TPP: ARRAYS.PAS STR.TPP
-        bpc /m /cp ARRAYS.PAS
+        bpc /b /cp ARRAYS.PAS
 
 KMINPUT.TPU: KMINPUT.PAS
-        tpc /m KMINPUT.PAS
+        tpc /b KMINPUT.PAS
 KMINPUT.TPP: KMINPUT.PAS
-        bpc /m /cp KMINPUT.PAS
+        bpc /b /cp KMINPUT.PAS
 
 DBB.TPU: DBB.PAS SYSTEM2.PAS
-        tpc /m DBB.PAS
+        tpc /b DBB.PAS
 DBB.TPP: DBB.PAS SYSTEM2.PAS
-        bpc /m /cp DBB.PAS
+        bpc /b /cp DBB.PAS
 
 clean:
         del *.TPU
