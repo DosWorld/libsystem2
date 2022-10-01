@@ -27,7 +27,7 @@ UNIT ExCache;
 INTERFACE
 
 CONST
-EXCACHE_ITEM_COUNT = 32;
+EXCACHE_ITEM_COUNT = 8;
 
 TYPE
 TEXCACHE_ITEM = RECORD
@@ -82,7 +82,7 @@ PROCEDURE excache_Free(c : PEXCACHE);
 BEGIN
         IF c = NIL THEN EXIT;
         IF c^.h <> 0 THEN exms_free(c^.h);
-        c^.h := 0;
+        FillChar(r^, SizeOf(TEXCACHE), #0);
         FreeMem(c, SizeOf(TEXCACHE));
 END;
 
