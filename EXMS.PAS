@@ -44,6 +44,7 @@ PROCEDURE ems_free(handle : WORD);
 { --- XMS -------------------------------------------------------- }
 
 FUNCTION xms_check_driver : BOOLEAN;
+FUNCTION xms_version : WORD;
 FUNCTION xms_maxavail : WORD;
 FUNCTION xms_malloc(pages : WORD) : WORD;
 FUNCTION xms_realloc(handle : WORD; old_page_count, new_page_count : WORD) : WORD;
@@ -98,11 +99,15 @@ TXMSCOPYREC = RECORD
         src_ofs  : DWORD;
         dst_hnd  : WORD;
         dst_ofs  : DWORD;
+{= XMS v3.51 fields =}
+        src_hi   : BYTE;
+        dst_hi   : BYTE;
 END;
 
 CONST
-EMS = 1;
-XMS = 2;
+EMS  = 1;
+XMS  = 2;
+SXMS = 3;
 
 VAR     emsrec     : TEMSCOPYREC;
         xmshandler : POINTER;
@@ -236,7 +241,13 @@ ASM
         XOR  AL, AL
 @ok:
 END;
-                        
+
+FUNCTION xms_version : WORD;ASSEMBLER;
+ASM
+        MOV  AH, 0
+        CALL [xmshandler]
+END;
+
 FUNCTION xms_get_handler : POINTER;ASSEMBLER;
 ASM
         PUSH ES
@@ -345,6 +356,7 @@ FUNCTION exms_maxavail : WORD;
 BEGIN
         IF mtype = EMS THEN exms_maxavail := ems_maxavail
         ELSE IF mtype = XMS THEN exms_maxavail := xms_maxavail
+        ELSE IF mtype = SXMS THEN exms_maxavail := xms_maxavail
         ELSE exms_maxavail := 0;
 END;
 
@@ -352,6 +364,7 @@ FUNCTION exms_malloc(pages : WORD) : WORD;
 BEGIN
         IF mtype = EMS THEN exms_malloc := ems_malloc(pages)
         ELSE IF mtype = XMS THEN exms_malloc := xms_malloc(pages)
+        ELSE IF mtype = SXMS THEN exms_malloc := xms_malloc(pages)
         ELSE exms_malloc := 0;
 END;
 
@@ -359,19 +372,22 @@ FUNCTION exms_realloc(handle : WORD; old_page_count, new_page_count : WORD) : WO
 BEGIN
         IF mtype = EMS THEN exms_realloc := ems_realloc(handle, old_page_count, new_page_count)
         ELSE IF mtype = XMS THEN exms_realloc := xms_realloc(handle, old_page_count, new_page_count)
+        ELSE IF mtype = SXMS THEN exms_realloc := xms_realloc(handle, old_page_count, new_page_count)
         ELSE exms_realloc := 0;
 END;
 
 PROCEDURE exms_copy(handle : WORD; page : WORD; VAR buf; dir : MEM_COPY_DIRECTION);
 BEGIN
         IF mtype = EMS THEN ems_copy(handle, page, buf, dir)
-        ELSE IF mtype = XMS THEN xms_copy(handle, page, buf, dir);
+        ELSE IF mtype = XMS THEN xms_copy(handle, page, buf, dir)
+        ELSE IF mtype = SXMS THEN xms_copy(handle, page, buf, dir);
 END;
 
 PROCEDURE exms_free(handle : WORD);
 BEGIN
         IF mtype = EMS THEN ems_free(handle)
-        ELSE IF mtype = XMS THEN xms_free(handle);
+        ELSE IF mtype = XMS THEN xms_free(handle)
+        ELSE IF mtype = SXMS THEN xms_free(handle);
 END;
 
 PROCEDURE BAD_XMS_CALL;
@@ -385,6 +401,7 @@ BEGIN
         xmshandler := @BAD_XMS_CALL;
         IF xms_check_driver THEN BEGIN
                 xmshandler := xms_get_handler;
-                mtype := XMS;
+                IF xms_version > $0350 THEN mtype := SXMS
+                ELSE mtype := XMS;
         END ELSE IF ems_check_driver THEN mtype := EMS;
 END.
