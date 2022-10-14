@@ -24,6 +24,9 @@
 #  Args
 
   Command line parser in modern style.
+#  LZJB
+
+  Port of LZJB compressor/decompressor.
 
 # License
 
