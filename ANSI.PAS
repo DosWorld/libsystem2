@@ -42,19 +42,12 @@ CLREOL   = ANSI_ESC + '[K';
 CONST
 ansi_enabled : BOOLEAN = TRUE;
 
-FUNCTION AnsiSysInstalled : BOOLEAN;
-
 FUNCTION fg(clr : BYTE) : STRING;
 FUNCTION bg(clr : BYTE) : STRING;
 
 IMPLEMENTATION
 
-FUNCTION AnsiSysInstalled : BOOLEAN; ASSEMBLER;
-ASM
-        MOV     AX,$1A00
-        INT     $2F
-        XOR     AH, AH
-END;
+USES Detect;
 
 FUNCTION fg(clr : BYTE) : STRING;
 BEGIN
@@ -70,4 +63,6 @@ BEGIN
         ELSE bg := '';
 END;
 
+BEGIN
+        ansi_enabled := IsAnsiSys AND (NOT IsOutputRedirected);
 END.

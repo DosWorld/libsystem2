@@ -184,6 +184,8 @@ PROCEDURE WriteArgsErrors(VAR state : TARGSTATE);
 
 IMPLEMENTATION
 
+USES Ansi;
+
 VAR prevExitProc : POINTER;
 
 TYPE
@@ -370,10 +372,10 @@ PROCEDURE ArgsHelp(VAR state : TARGSTATE; stop : BOOLEAN);
 VAR     i, maxLen  : INTEGER;
         name       : STRING;
 BEGIN
-        Write('Usage: ', GetSelfName);
+        Write(fg(WHITE), bg(BLACK), 'Usage: ', fg(CYAN), GetSelfName, fg(YELLOW));
         IF state.cmds_count <> 0 THEN Write(' command');
         IF (state.opts_count + state.flags_count) <> 0 THEN Write(' [flags/options]');
-        WriteLn(' arg0 .. argN');
+        WriteLn(' arg0 .. argN', fg(WHITE));
         IF state.cmds_count <> 0 THEN BEGIN
                 maxLen := 0;
                 FOR i := 1 TO state.opts_size DO
@@ -381,12 +383,12 @@ BEGIN
                         AND (state.opts[i]^.otype = OPTCMD)
                         THEN maxLen := ORD(state.opts[i]^.name[0]);
                 WriteLn;
-                WriteLn('Commands:');
+                WriteLn(fg(CYAN), 'Commands:', fg(WHITE));
                 FOR i := 1 TO state.opts_size DO
                 IF state.opts[i]^.otype = OPTCMD THEN BEGIN
                         name := state.opts[i]^.name;
                         WHILE ORD(name[0]) < maxLen DO name := name + ' ';
-                        Write(' ', name, ' - ');
+                        Write(' ', fg(YELLOW), name, fg(WHITE), ' - ');
                         WriteLn(state.opts[i]^.help);
                 END;
         END;
@@ -398,12 +400,12 @@ BEGIN
                         THEN maxLen := ORD(state.opts[i]^.name[0]);
                 Inc(maxLen, 1);
                 WriteLn;
-                WriteLn('Flags:');
+                WriteLn(fg(CYAN), 'Flags:', fg(WHITE));
                 FOR i := 1 TO state.opts_size DO
                 IF state.opts[i]^.otype = OPTBOOL THEN BEGIN
                         name := state.opts[i]^.name;
                         WHILE ORD(name[0]) < maxLen DO name := name + ' ';
-                        WriteLn(' /', name, state.opts[i]^.help);
+                        WriteLn(fg(YELLOW), ' /', name, fg(WHITE), state.opts[i]^.help);
                 END;
         END;
         IF state.opts_count <> 0 THEN BEGIN
@@ -414,12 +416,12 @@ BEGIN
                         THEN maxLen := ORD(state.opts[i]^.name[0]);
                 Inc(maxLen, 5);
                 WriteLn;
-                WriteLn('Options:');
+                WriteLn(fg(CYAN),'Options:', fg(WHITE));
                 FOR i := 1 TO state.opts_size DO
                 IF state.opts[i]^.otype = OPTSTR THEN BEGIN
                         name := state.opts[i]^.name + '=<v>';
                         WHILE ORD(name[0]) < maxLen DO name := name + ' ';
-                        Write(' /', name, state.opts[i]^.help);
+                        Write(fg(YELLOW), ' /', name, fg(WHITE), state.opts[i]^.help);
                         IF Length(state.opts[i]^.default) <> 0 THEN
                                 Write(' (default "', state.opts[i]^.default, '")');
                         WriteLn;
@@ -500,7 +502,7 @@ END;
 PROCEDURE ArgsExitProc;FAR;
 BEGIN
         IF (ErrorAddr = NIL) AND (ExitCode <> 0) THEN BEGIN
-                Write('Use /? for help.');
+                Write(bg(BLACK), fg(WHITE), 'Use ', fg(YELLOW), '/?', fg(WHITE), ' for help.');
         END;
         exitProc := prevExitProc;
 END;

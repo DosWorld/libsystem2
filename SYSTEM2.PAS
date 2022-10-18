@@ -148,9 +148,6 @@ PROCEDURE FileDelete(s : STRING);
 FUNCTION GetCurrentDisk : BYTE;
 PROCEDURE SetCurrentDisk(disk : BYTE);
 
-FUNCTION IsFreeDos : BOOLEAN;
-FUNCTION GetFreeDosVer : PCHAR;
-
 IMPLEMENTATION
 
 USES Dos {$IFDEF USE_CACHE}, ExCache{$ENDIF};
@@ -1260,30 +1257,6 @@ ASM
         MOV  AH, $0e
         MOV  DL, disk
         INT  $21
-END;
-
-FUNCTION IsFreeDos : BOOLEAN;ASSEMBLER;
-ASM
-        MOV  AX, $3000;
-        XOR  BX, BX
-        INT  $21
-        CMP  BH, $FD
-        JE   @end
-        XOR  BH, BH
-@end:
-        MOV  AL, BH
-END;
-
-FUNCTION GetFreeDosVer : PCHAR; ASSEMBLER;
-ASM
-        MOV  AX,$33FF
-        XOR  DX, DX
-        INT  $21
-        TEST DX, DX
-        JNZ  @end
-        XOR  AX, AX
-        MOV  DX, AX
-@end:
 END;
 
 {

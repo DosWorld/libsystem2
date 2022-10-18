@@ -82,7 +82,7 @@ PROCEDURE excache_Free(c : PEXCACHE);
 BEGIN
         IF c = NIL THEN EXIT;
         IF c^.h <> 0 THEN exms_free(c^.h);
-        FillChar(r^, SizeOf(TEXCACHE), #0);
+        FillChar(c^, SizeOf(TEXCACHE), #0);
         FreeMem(c, SizeOf(TEXCACHE));
 END;
 
