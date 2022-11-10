@@ -98,9 +98,11 @@ PROCEDURE Close (VAR f : BFILE);
 FUNCTION IsOpen(VAR f : BFILE):BOOLEAN;
 
 FUNCTION ReadByte(VAR f : BFILE) : BYTE;
+FUNCTION ReadInteger(VAR f : BFILE) : INTEGER;
 FUNCTION ReadWord(VAR f : BFILE) : WORD;
 FUNCTION ReadDWord(VAR f : BFILE) : DWORD;
 PROCEDURE ReadLn (VAR f : BFILE; VAR s : STRING);
+PROCEDURE ReadAsciiz(VAR f : BFile; VAR s : STRING);
 FUNCTION BlockRead (VAR f : BFILE; VAR d; count : WORD) : WORD;
 
 PROCEDURE WriteByte(VAR f : BFILE; b : BYTE);
@@ -972,6 +974,19 @@ BEGIN
         lWrite(STDERR, LN_STR[1], ORD(LN_STR[0]));
 END;
 
+PROCEDURE ReadAsciiz(VAR f : BFile; VAR s : STRING);
+VAR     p       : LONGINT;
+BEGIN
+        p := FilePos(f);
+        BlockRead(f, s[1], 255);
+        s[0] := #0;
+        WHILE s[0] < #255 DO BEGIN
+                IF s[ord(s[0]) + 1] = #0 THEN BREAK;
+                Inc(s[0]);
+        END;
+        Seek(f, p + ord(s[0]) + 1);
+END;
+
 PROCEDURE ReadLn(VAR f : BFILE; VAR s : STRING);
 VAR     c           : CHAR;
         p           : PCHAR;
@@ -1076,6 +1091,19 @@ VAR r : BYTE;
 BEGIN
         IF BlockRead(f, r, SizeOf(r)) <> 1 THEN r := 0;
         ReadByte := r;
+END;
+
+FUNCTION ReadInteger(VAR f : BFILE) : INTEGER;
+VAR     b : ARRAY[0..1] OF BYTE;
+        i : INTEGER;
+BEGIN
+        i := 0;
+        IF BlockRead(f, b, SizeOf(b)) = 2 THEN BEGIN
+                i := b[1];
+                i := i SHL 8;
+                i := i OR b[0];
+        END;
+        ReadInteger := i;
 END;
 
 FUNCTION ReadWord(VAR f : BFILE) : WORD;
