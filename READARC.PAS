@@ -38,14 +38,41 @@ FILE_ENTRY=RECORD
         next   : PFILE_ENTRY;
 END;
 
+{ funtion to operate with (loaded) files list }
+
 FUNCTION FE_CREATE(next : PFILE_ENTRY; VAR name : STRING) : PFILE_ENTRY;
 FUNCTION FE_FIND(root : PFILE_ENTRY; name : STRING; VAR dst : PFILE_ENTRY) : BOOLEAN;
 PROCEDURE FE_DESTROY_ALL(fe : PFILE_ENTRY);
+
+{ funtion to load files list from archive }
 
 FUNCTION load_zip(VAR f : BFile) : PFILE_ENTRY;
 FUNCTION load_ha(VAR f : BFile) : PFILE_ENTRY;
 FUNCTION load_tar(VAR f : BFile) : PFILE_ENTRY;
 FUNCTION load_any(VAR f : BFile) : PFILE_ENTRY;
+
+{ ================================================
+  Usage example:
+
+uses System2, ReadArc;
+
+var     n, i : PFILE_ENTRY;
+        f    : BFile;
+begin
+        assign(f, 'test.tar');
+        reset(f);
+        n := load_tar(f);
+        close(f);
+        i := n;
+        while i <> nil do begin
+                system.writeln(i^.name,
+                        , #9, i^.ofs:8
+                        , #9, i^.csize:8);
+                i := i^.next;
+        end;
+        FE_DESTROY_ALL(n);
+end.
+================================================== }
 
 IMPLEMENTATION
 
@@ -246,17 +273,18 @@ BEGIN
                         i := 0;
                         WHILE i < 5 DO BEGIN
                                 IF buf[i+258] = #0 THEN BREAK;
-                                fname := fname + buf[i+258];
+                                fname[i+1] := buf[i+258];
                                 Inc(i);
                         END;
+                        fname[0] := CHR(i);
                         IF fname <> 'ustar' THEN BREAK;
-                        fname := '';
                         i := 1;
                         WHILE i < 101 DO BEGIN
                                 IF buf[i] = #0 THEN BREAK;
-                                fname := fname + buf[i];
+                                fname[i] := buf[i];
                                 Inc(i);
                         END;
+                        fname[0] := CHR(i - 1);
                         fsize := 0;
                         i := 0;
                         WHILE i < 12 DO BEGIN
@@ -285,11 +313,10 @@ END;
 FUNCTION load_any(VAR f : BFile) : PFILE_ENTRY;
 VAR     r       : PFILE_ENTRY;
 BEGIN
-        r := load_tar(f);
-        IF r = NIL THEN BEGIN
-                r := load_zip(f);
-                IF r = NIL THEN r := load_ha(f);
-        END;
+        r := NIL;
+        IF r = NIL THEN r := load_tar(f);
+        IF r = NIL THEN r := load_zip(f);
+        IF r = NIL THEN r := load_ha(f);
         load_any := r;
 END;
 
