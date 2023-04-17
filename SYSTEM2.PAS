@@ -89,6 +89,9 @@ PROCEDURE Append (VAR f : BFILE);
 { ReWriteTemp does not requre call to Assign }
 PROCEDURE ReWriteTemp (VAR f : BFILE);
 
+{ Console EOF, for case when input is redirected }
+FUNCTION cEof : BOOLEAN;
+
 FUNCTION Eof (VAR f : BFILE) : BOOLEAN;
 PROCEDURE Flush (VAR f : BFILE);
 
@@ -493,6 +496,22 @@ BEGIN
                         Inc(s[0]);
                 END;
         END;
+END;
+
+FUNCTION cEof : BOOLEAN;ASSEMBLER;
+ASM
+        MOV  AX, $4406
+        XOR  BX, BX
+        INT  $21
+        JC   @err
+        OR   AL, AL
+        JZ   @err
+        XOR  AX, AX
+        JMP  @end
+@err:
+        XOR  AX, AX
+        DEC  AX
+@end:
 END;
 
 FUNCTION ParamCount : INTEGER;

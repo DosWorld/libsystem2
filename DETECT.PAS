@@ -115,7 +115,6 @@ ASM
         INT  $21
         XOR  AL, AL
         AND  DL, $81
-        XOR  AL, AL
         OR   DL, DL
         JNZ  @end
         INC  AL
@@ -129,7 +128,6 @@ ASM
         INT  $21
         XOR  AL, AL
         AND  DL, $82
-        XOR  AL, AL
         OR   DL, DL
         JNZ  @end
         INC  AL

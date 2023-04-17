@@ -30,15 +30,6 @@ FUNCTION change_ext(s:STRING; new_ext:STRING):STRING;
 FUNCTION get_filename_ext(s:STRING):STRING;
 FUNCTION poschr(var s : string; c : CHAR) : INTEGER;
 
-FUNCTION strlen(p : PCHAR):WORD;
-PROCEDURE strcpy(dst, src : PCHAR);
-PROCEDURE strupr(p : PCHAR);
-FUNCTION strhash(p : PCHAR):WORD;
-FUNCTION strchr(p : PCHAR; c : CHAR) : PCHAR;
-
-FUNCTION strpas(p : PCHAR) : STRING;
-FUNCTION strpcopy(dest : PCHAR; source : STRING) : PCHAR;
-
 PROCEDURE upstr(VAR s : STRING);
 
 FUNCTION hcode(VAR s : STRING):WORD;
@@ -81,32 +72,6 @@ BEGIN
         get_filename_ext := r;
 END;
 
-PROCEDURE strupr(p : PCHAR);ASSEMBLER;
-ASM
-        push       ds
-        push       es
-
-        lds        si, p
-        push       ds
-        pop        es
-        cld
-        mov        di, si
-@cont:
-        lodsb
-        cmp        al, 'a'
-        jl         @noconv
-        cmp        al, 'z'
-        jg         @noconv
-        sub        al, $20
-@noconv:
-        stosb
-        or         al, al
-        jnz        @cont
-@end:
-        pop        es
-        pop        ds
-END;
-
 PROCEDURE upstr(var s : STRING);ASSEMBLER;
 ASM
         push       ds
@@ -134,39 +99,6 @@ ASM
         jnz        @cont
 @end:
         pop        es
-        pop        ds
-END;
-
-PROCEDURE strcpy(dst, src:PCHAR);ASSEMBLER;
-ASM
-        push       ds
-        push       es
-        lds        si, src
-        les        di, dst
-        cld
-@cont:
-        lodsb
-        stosb
-        or         al, al
-        jnz        @cont
-        pop        es
-        pop        ds
-END;
-
-FUNCTION strlen(p : PCHAR):WORD;ASSEMBLER;
-ASM
-        push       ds
-        lds        si, p
-        xor        bx, bx
-        cld
-@cont:
-        lodsb
-        or         al, al
-        jnz        @end
-        inc        bx
-        jmp        @cont
-@end:
-        mov        ax, bx
         pop        ds
 END;
 
@@ -225,14 +157,6 @@ ASM
 @end:
         mov        ax, bx
         pop        ds
-END;
-
-FUNCTION strhash(p : PCHAR):WORD;
-VAR h : WORD;
-BEGIN
-        h := 0;
-        WHILE p[0] <> #0 DO BEGIN h := h * 33 + ORD(p[0]); Inc(p); END;
-        strhash := h;
 END;
 
 FUNCTION hexb(b : BYTE):STRING;
@@ -441,24 +365,6 @@ BEGIN
         ltoa := s;
 END;
 
-FUNCTION strchr(p : PCHAR; c : CHAR) : PCHAR;ASSEMBLER;
-ASM
-        push       ds
-        mov        ah, c
-        lds        si, p
-        cld
-@cont:
-        lodsb
-        or         al, al
-        jz         @end
-        cmp        al, ah
-        jnz        @cont
-@end:
-        mov        ax, si
-        mov        dx, ds
-        pop        ds
-END;
-
 FUNCTION atol(s : STRING; default_val : LONGINT) : LONGINT;
 VAR res : LONGINT; err_pos : INTEGER;
 BEGIN
@@ -513,28 +419,6 @@ BEGIN
                 END;
         END;
         unquote := str;
-END;
-
-FUNCTION strpas(p : PCHAR) : STRING;
-VAR     r : STRING;
-BEGIN
-        r[0] := #0;
-        WHILE (p[0] <> #0) AND (r[0] <> #255) DO BEGIN
-                Inc(r[0]);
-                r[ORD(r[0])] := p[0];
-                Inc(p);
-        END;
-        strpas := r;
-END;
-
-FUNCTION strpcopy(dest : PCHAR; source : STRING) : PCHAR;
-VAR     l : INTEGER;
-BEGIN
-        l := ORD(source[0]);
-        IF l <> 0 THEN Move(source[1], dest[0], l);
-        Inc(dest, l);
-        dest[0] := #0;
-        strpcopy := dest;
 END;
 
 FUNCTION poschr(var s : string; c : CHAR) : INTEGER;ASSEMBLER;

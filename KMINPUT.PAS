@@ -164,6 +164,9 @@ SCAN_SLASH         = $35;
 
 SCAN_SPACE         = $39;
 
+SCAN_GREY_MINUS    = $4A;
+SCAN_GREY_PLUS     = $4E;
+
 FUNCTION kbd_getkey : WORD;
 FUNCTION kbd_haskey : BOOLEAN;
 FUNCTION kbd_getflags : BYTE;
