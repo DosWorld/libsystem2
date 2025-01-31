@@ -496,6 +496,7 @@ BEGIN
                         Inc(s[0]);
                 END;
         END;
+        IF NOT (s[ORD(s[0])] IN ['\', '/']) THEN s := s + '\';
 END;
 
 FUNCTION cEof : BOOLEAN;ASSEMBLER;
