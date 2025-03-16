@@ -544,6 +544,33 @@ BEGIN
         ParamCount := r;
 END;
 
+FUNCTION GetSelfName(psp_seg : WORD; VAR sname : PCHAR) : STRING;
+VAR     r   : STRING;
+        c   : CHAR;
+        p   : PCHAR;
+BEGIN
+        r[0] := #0;
+        IF sname = NIL THEN BEGIN
+                sname := ptr(PWORD(ptr(psp_seg, $2C))^, 0);
+                c := #0;
+                WHILE NOT ((sname[0] = #0) AND (c = #0)) DO BEGIN
+                        c := sname[0];
+                        Inc(sname, 1);
+                END;
+                Inc(sname, 3);
+        END;
+        IF sname <> NIL THEN BEGIN
+                p := sname;
+                WHILE r[0] <> #255 DO BEGIN
+                        IF p[0] = #0 THEN BREAK;
+                        Inc(r[0]);
+                        r[ORD(r[0])] := p[0];
+                        Inc(p);
+                END;
+        END;
+        GetSelfName := r;
+END;
+
 FUNCTION ParamStr(i : INTEGER) : STRING;
 VAR     r   : STRING;
         str : PSTRING;
@@ -584,24 +611,7 @@ BEGIN
                         END;
                 END;
         END ELSE BEGIN
-                IF SELFNAME = NIL THEN BEGIN
-                        SELFNAME := ptr(PWORD(ptr(PrefixSeg, $2C))^, 0);
-                        c := #0;
-                        WHILE NOT ((SELFNAME[0] = #0) AND (c = #0)) DO BEGIN
-                                c := SELFNAME[0];
-                                Inc(SELFNAME, 1);
-                        END;
-                        Inc(SELFNAME, 3);
-                END;
-                IF SELFNAME <> NIL THEN BEGIN
-                        p := SELFNAME;
-                        WHILE r[0] <> #255 DO BEGIN
-                                IF p[0] = #0 THEN BREAK;
-                                Inc(r[0]);
-                                r[ORD(r[0])] := p[0];
-                                Inc(p);
-                        END;
-                END;
+                r := GetSelfName(PrefixSeg, SELFNAME);
         END;
         ParamStr := r;
 END;

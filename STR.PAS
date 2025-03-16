@@ -53,6 +53,7 @@ FUNCTION itoa(i : INTEGER):STRING;
 FUNCTION wtoa(w : WORD):STRING;
 FUNCTION ltoa(l : LONGINT):STRING;
 FUNCTION atoi(s : STRING; default_val : INTEGER) : INTEGER;
+FUNCTION atow(s : STRING; default_val : WORD) : WORD;
 FUNCTION atol(s : STRING; default_val : LONGINT) : LONGINT;
 FUNCTION ahtob(str : STRING) : BYTE;
 
@@ -379,6 +380,14 @@ BEGIN
      Val(s, res, err_pos);
      IF err_pos <> 0 THEN res := default_val;
      atoi := res;
+END;
+
+FUNCTION atow(s : STRING; default_val : WORD) : WORD;
+VAR res : INTEGER; err_pos : INTEGER;
+BEGIN
+     Val(s, res, err_pos);
+     IF err_pos <> 0 THEN res := default_val;
+     atow := res;
 END;
 
 FUNCTION ahtob(str : STRING) : BYTE;
