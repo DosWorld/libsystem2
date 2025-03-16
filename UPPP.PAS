@@ -78,7 +78,8 @@ BEGIN
                 INC(Dest);
                 Flags := 0;
                 BitMask := 1;
-                FOR I := 0 TO 7 DO BEGIN
+                I := 0;
+                WHILE i <= 7 DO BEGIN
                         IF Len = 0 THEN BREAK;
                         IF GuessTable[Hash] = Source^ THEN Flags := Flags OR BitMask
                         ELSE BEGIN
@@ -90,6 +91,7 @@ BEGIN
                         INC(Source);
                         BitMask := BitMask SHL 1;
                         DEC(Len);
+                        INC(I);
                 END;
                 FlagDest^ := CHR(Flags);
         END;
@@ -108,7 +110,8 @@ BEGIN
                 Flags := BYTE(Source^);
                 INC(Source);
                 BitMask := 1;
-                FOR I := 0 TO 7 DO BEGIN
+                I := 0;
+                WHILE i <= 7 DO BEGIN
                         IF (Flags AND BitMask) <> 0 THEN Dest^ := GuessTable[Hash]
                         ELSE BEGIN
                                 GuessTable[Hash] := Source^;
@@ -119,6 +122,7 @@ BEGIN
                         Hash := HashCode(Hash, BYTE(Dest^));
                         INC(Dest);
                         BitMask := BitMask SHL 1;
+                        INC(i);
                 END;
                 DEC(Len);
         END;
