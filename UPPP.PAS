@@ -19,6 +19,13 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. }
+{ Predictor Compression Protocol
+  https://www.ietf.org/rfc/rfc1978.txt
+
+ Predictor is a high speed compression algorithm, available without
+ license fees.  The compression ratio obtained using predictor is not
+ as good as other compression algorithms, but it remains one of the
+ fastest algorithms available. }
 {$A-,I-,S-,R-,D+,L+,Q-,F-,G-,O-,B-}
 UNIT UPPP;
 
