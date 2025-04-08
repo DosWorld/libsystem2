@@ -164,6 +164,7 @@ ASM
         mov   ax, cx
         neg   ax
         dec   ax
+        dec   ax
 END;
 
 FUNCTION strcpy(dst, src : PCHAR) : PCHAR;ASSEMBLER;
@@ -230,9 +231,9 @@ ASM
         push  ds
         lds   si, src
 @cont:  lodsb
+        stosb
         or    al, al
         jz    @end
-        stosb
         jmp   @cont
 @end:
         pop   ds
