@@ -1,74 +1,13 @@
-all : SYSTEM2.TPU WINCB.TPU STRBIN.TPU ARGS.TPU DBM.TPU DBB.TPU RC4.TPU ANSI.TPU QSORT.TPU STR.TPU KMINPUT.TPU DETECT.TPU READARC.TPU PSON.TPU CSTRING.TPU UPPP.TPU UTAR.TPU UJSON.PAS LZPMEM.TPU DYNARR.TPU HASHMAP.TPU PCXRLE.TPU
+all : rebuild.exe
+	rebuild
 
-SYSTEM2.TPU: SYSTEM2.PAS EXMS.PAS EXCACHE.PAS
-        tpc /b SYSTEM2.PAS
-
-QSORT.TPU: QSORT.PAS
-        tpc /b QSORT.PAS
-
-WINCB.TPU: WINCB.PAS
-        tpc /b WINCB.PAS
-
-ARGS.TPU: ARGS.PAS
-        tpc /b ARGS.PAS
-
-ANSI.TPU: ANSI.PAS
-        tpc /b ANSI.PAS
-
-DBM.TPU: DBM.PAS SYSTEM2.PAS
-        tpc /b DBM.PAS
-
-RC4.TPU: RC4.PAS
-        tpc /b RC4.PAS
-
-STR.TPU: STR.PAS
-        tpc /b STR.PAS
-
-DETECT.TPU: DETECT.PAS
-        tpc /b DETECT.PAS
-
-STRBIN.TPU: STRBIN.PAS
-        tpc /b STRBIN.PAS
-
-KMINPUT.TPU: KMINPUT.PAS
-        tpc /b KMINPUT.PAS
-
-DBB.TPU: DBB.PAS SYSTEM2.PAS
-        tpc /b DBB.PAS
-
-PSON.TPU: PSON.PAS
-        tpc /b PSON.PAS
-
-READARC.TPU: READARC.PAS SYSTEM2.PAS
-        tpc /b READARC.PAS
-
-CSTRING.TPU: CSTRING.PAS
-	tpc /b CSTRING.PAS
-
-UPPP.TPU: UPPP.PAS
-        tpc /b UPPP.PAS
-
-UTAR.TPU: UTAR.PAS
-        tpc /b UTAR.PAS
-
-UJSON.TPU: UJSON.PAS
-        tpc /b UJSON.PAS
-
-LZPMEM.TPU: LZPMEM.PAS
-        tpc /b LZPMEM.PAS
-
-DYNARR.TPU : DYNARR.PAS
-        tpc /b DYNARR.PAS
-
-HASHMAP.TPU : HASHMAP.PAS
-        tpc /b HASHMAP.PAS
-
-PCXRLE.TPU : PCXRLE.PAS
-        tpc /b PCXRLE.PAS
+rebuild.exe: rebuild.pas
+	tpc rebuild.pas
 
 clean:
         del *.TPU
         del *.BAK
+        del *.EXE
 
 install: all
         copy *.tpu ..\TPU\
