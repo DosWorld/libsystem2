@@ -19,7 +19,7 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. }
-{$A-,I-,S-,R-,D+,L+,Q-,F-,G-,O-,B-}
+{$I switches.inc}
 UNIT UTAR;
 
 INTERFACE
@@ -33,8 +33,8 @@ INTERFACE
         Assign(f, 'hello.tar');
         Reset(f, 1);
         WHILE utar.Find(f, fname, fsize) DO BEGIN
-			WriteLn(fname, ' ', fsize);
-			Seek(f, FilePos(f) + fsize);
+                        WriteLn(fname, ' ', fsize);
+                        Seek(f, FilePos(f) + fsize);
         END;
         Close(f);
     END;
@@ -46,18 +46,18 @@ INTERFACE
         Assign(f, 'hello.tar');
         ReWrite(f, 1);
 
-		{ hello.txt }
-		str := 'Hello, world!';
-		utar.Add(f, 'hello.txt', Length(str));
-		BlockWrite(f, str[1], Length(str));
+                { hello.txt }
+                str := 'Hello, world!';
+                utar.Add(f, 'hello.txt', Length(str));
+                BlockWrite(f, str[1], Length(str));
 
-		{ another.txt }
-		str := 'Hello, another world!';
-		utar.Add(f, 'another.txt', Length(str));
-		BlockWrite(f, str[1], Length(str));
+                { another.txt }
+                str := 'Hello, another world!';
+                utar.Add(f, 'another.txt', Length(str));
+                BlockWrite(f, str[1], Length(str));
 
-		{ close file }
-		utar.Finish(f);
+                { close file }
+                utar.Finish(f);
         Close(f);
     END; *)
 
@@ -113,28 +113,28 @@ END;
 FUNCTION GetStrMem(VAR buf : TAR_BLOCK; ofs, len : INTEGER) : STRING;
 VAR s : STRING;
 BEGIN
-	s := '';
-	WHILE (len > 0) AND (buf[ofs] <> #0) DO BEGIN
-		s := s + buf[ofs];
-		INC(ofs);
-		DEC(len);
-	END;
-	GetStrMem := s;
+        s := '';
+        WHILE (len > 0) AND (buf[ofs] <> #0) DO BEGIN
+                s := s + buf[ofs];
+                INC(ofs);
+                DEC(len);
+        END;
+        GetStrMem := s;
 END;
 
 FUNCTION lpad(s : STRING; len : INTEGER) : STRING;
 BEGIN
-	WHILE Length(s) < len DO s := '0' + s;
-	lpad := s;
+        WHILE Length(s) < len DO s := '0' + s;
+        lpad := s;
 END;
 
 FUNCTION CheckSum(VAR buf : TAR_BLOCK) : INTEGER;
 VAR r : INTEGER;
-	i : INTEGER;
+        i : INTEGER;
 BEGIN
-	r := 0;
+        r := 0;
     FOR i := 1 TO TAR_BLOCKSIZE DO INC(r, ORD(buf[i]));
-	CheckSum := r;
+        CheckSum := r;
 END;
 
 (* ----------------------------------------------------------------------------------- *)
@@ -152,16 +152,16 @@ BEGIN
     IF i <> 0 THEN Seek(f, p + (TAR_BLOCKSIZE - i));
     BlockRead(f, buf, TAR_BLOCKSIZE);
     IF GetStrMem(buf, 258, 7) = TAR_USTAR THEN BEGIN
-		filename := GetStrMem(buf, 1, 100);
-		str := GetStrMem(buf, 125, 12);
-		filesize := 0;
-		i := 1;
-		WHILE (i <= Length(str)) AND (str[i] IN ['0'..'7']) DO BEGIN
-			filesize := filesize * 8;
-			INC(filesize, ORD(str[i]) - ORD('0'));
-			INC(i);
-		END;
-		r := TRUE;
+                filename := GetStrMem(buf, 1, 100);
+                str := GetStrMem(buf, 125, 12);
+                filesize := 0;
+                i := 1;
+                WHILE (i <= Length(str)) AND (str[i] IN ['0'..'7']) DO BEGIN
+                        filesize := filesize * 8;
+                        INC(filesize, ORD(str[i]) - ORD('0'));
+                        INC(i);
+                END;
+                r := TRUE;
     END ELSE Seek(f, p);
     Find := r;
 END;

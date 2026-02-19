@@ -19,7 +19,7 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. }
-{$A+,I-,S-,R-,D+,L+,Q-,F-,G-,O-,B-}
+{$I switches.inc}
 UNIT CString;
 
 INTERFACE
@@ -164,7 +164,6 @@ ASM
         mov   ax, cx
         neg   ax
         dec   ax
-        dec   ax
 END;
 
 FUNCTION strcpy(dst, src : PCHAR) : PCHAR;ASSEMBLER;
@@ -231,9 +230,9 @@ ASM
         push  ds
         lds   si, src
 @cont:  lodsb
-        stosb
         or    al, al
         jz    @end
+        stosb
         jmp   @cont
 @end:
         pop   ds

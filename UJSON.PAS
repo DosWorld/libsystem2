@@ -19,7 +19,7 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE. }
-{$A-,I-,S-,R-,D+,L+,Q-,F-,G-,O-,B-}
+{$I switches.inc}
 UNIT UJSON;
 
 INTERFACE
@@ -34,8 +34,8 @@ USES ujson;
 
 FUNCTION mycb(key, val : STRING; ctx : POINTER) : BOOLEAN;
 BEGIN
-	WriteLn(key, '=', val);
-	mycb := TRUE;
+        WriteLn(key, '=', val);
+        mycb := TRUE;
 END;
 
 CONST
@@ -67,8 +67,8 @@ t : PCHAR =
 '}' + #13 + #10;
 
 BEGIN
-	WriteLn(ujson.Parse(t, @mycb, NIL));
-	WriteLn(ujson.Parse(' [ 1, 2, 3, 4, 5, "Hello world!" ]'+#10, @mycb, NIL));
+        WriteLn(ujson.Parse(t, @mycb, NIL));
+        WriteLn(ujson.Parse(' [ 1, 2, 3, 4, 5, "Hello world!" ]'+#10, @mycb, NIL));
 END.
 ----------------------------------------------------------------------
 Must produce output: 
@@ -121,81 +121,81 @@ FUNCTION SkipSpaces(VAR p : PCHAR) : CHAR; BEGIN WHILE (p^ <> #0) AND (p^ <= ' '
 
 FUNCTION IsChr(VAR p : PCHAR; c : CHAR) : BOOLEAN;
 BEGIN
-	IF p^ = c THEN BEGIN INC(p); IsChr := TRUE; END ELSE IsChr := FALSE;
+        IF p^ = c THEN BEGIN INC(p); IsChr := TRUE; END ELSE IsChr := FALSE;
 END;
 
 FUNCTION ParseSimpleValue(VAR p : PCHAR) : STRING;
 VAR
-	r : STRING;
-	c : CHAR;
+        r : STRING;
+        c : CHAR;
 BEGIN
-	r := '';
-	IF IsChr(p, '"') THEN BEGIN
-		WHILE NOT (p^ IN [#0, '"']) DO BEGIN
-			IF IsChr(p, '\') THEN BEGIN
-				c := p^;
-				CASE c OF
-				'0': c := #0;
-				't': c := #9;
-				'r': c := #13;
-				'n': c := #10;
-				END;
-				r := r + c;
-			END ELSE BEGIN
-				r := r + p^;
-			END;
-			INC(p);
-		END;
-		IsChr(p, '"');
-	END ELSE WHILE (p^ > ' ') AND (NOT (p^ IN [#0, ',', ARR_END, OBJ_END, ':'])) DO BEGIN
-		r := r + p^;
-		INC(p);
-	END;
-	SkipSpaces(p);
-	ParseSimpleValue := r;
+        r := '';
+        IF IsChr(p, '"') THEN BEGIN
+                WHILE NOT (p^ IN [#0, '"']) DO BEGIN
+                        IF IsChr(p, '\') THEN BEGIN
+                                c := p^;
+                                CASE c OF
+                                '0': c := #0;
+                                't': c := #9;
+                                'r': c := #13;
+                                'n': c := #10;
+                                END;
+                                r := r + c;
+                        END ELSE BEGIN
+                                r := r + p^;
+                        END;
+                        INC(p);
+                END;
+                IsChr(p, '"');
+        END ELSE WHILE (p^ > ' ') AND (NOT (p^ IN [#0, ',', ARR_END, OBJ_END, ':'])) DO BEGIN
+                r := r + p^;
+                INC(p);
+        END;
+        SkipSpaces(p);
+        ParseSimpleValue := r;
 END;
 
 FUNCTION ParseObject(VAR p : PCHAR; prefix : STRING; cb : UJSON_CALL_BACK; ctx : POINTER; endchr : CHAR) : BOOLEAN;
 VAR ckey : STRING;
     cval : STRING;
-	r    : BOOLEAN;
-	i    : LONGINT;
+        r    : BOOLEAN;
+        i    : LONGINT;
 BEGIN
-	r := TRUE;
-	i := 0;
-	WHILE (NOT (SkipSpaces(p) IN [#0, OBJ_END, ARR_END])) AND r DO BEGIN
-		IF endchr = ARR_END THEN BEGIN
-			Str(i, ckey);
-			INC(i);
-		END ELSE BEGIN
-			ckey := ParseSimpleValue(p);
-			IF NOT IsChr(p, ':') THEN BEGIN r := FALSE; BREAK; END;
-			SkipSpaces(p);
-		END;
-		IF IsChr(p, OBJ_START) THEN r := ParseObject(p, prefix + ckey + '.', cb, ctx, OBJ_END)
-		ELSE IF IsChr(p, ARR_START) THEN r := ParseObject(p, prefix + ckey + '.', cb, ctx, ARR_END)
-		ELSE BEGIN
-			cval := ParseSimpleValue(p);
-			r := cb(prefix + ckey, cval, ctx);
-		END;
-		IF NOT r THEN BREAK;
-		IF NOT IsChr(p, ',') THEN BREAK;
-	END;
-	IF r THEN r := IsChr(p, endchr);
-	IF r AND (endchr = ARR_END) THEN BEGIN
-		Str(i, ckey);
-		r := cb(prefix + 'size', ckey, ctx);
-	END;
-	SkipSpaces(p);
-	ParseObject := r;
+        r := TRUE;
+        i := 0;
+        WHILE (NOT (SkipSpaces(p) IN [#0, OBJ_END, ARR_END])) AND r DO BEGIN
+                IF endchr = ARR_END THEN BEGIN
+                        Str(i, ckey);
+                        INC(i);
+                END ELSE BEGIN
+                        ckey := ParseSimpleValue(p);
+                        IF NOT IsChr(p, ':') THEN BEGIN r := FALSE; BREAK; END;
+                        SkipSpaces(p);
+                END;
+                IF IsChr(p, OBJ_START) THEN r := ParseObject(p, prefix + ckey + '.', cb, ctx, OBJ_END)
+                ELSE IF IsChr(p, ARR_START) THEN r := ParseObject(p, prefix + ckey + '.', cb, ctx, ARR_END)
+                ELSE BEGIN
+                        cval := ParseSimpleValue(p);
+                        r := cb(prefix + ckey, cval, ctx);
+                END;
+                IF NOT r THEN BREAK;
+                IF NOT IsChr(p, ',') THEN BREAK;
+        END;
+        IF r THEN r := IsChr(p, endchr);
+        IF r AND (endchr = ARR_END) THEN BEGIN
+                Str(i, ckey);
+                r := cb(prefix + 'size', ckey, ctx);
+        END;
+        SkipSpaces(p);
+        ParseObject := r;
 END;
 
 FUNCTION Parse(p : PCHAR; cb : UJSON_CALL_BACK; ctx : POINTER) : BOOLEAN;
 BEGIN
-	SkipSpaces(p);
-	IF IsChr(p, OBJ_START) THEN Parse := ParseObject(p, '', cb, ctx, OBJ_END)
-	ELSE IF IsChr(p, ARR_START) THEN Parse := ParseObject(p, '', cb, ctx, ARR_END)
-	ELSE Parse := FALSE;
+        SkipSpaces(p);
+        IF IsChr(p, OBJ_START) THEN Parse := ParseObject(p, '', cb, ctx, OBJ_END)
+        ELSE IF IsChr(p, ARR_START) THEN Parse := ParseObject(p, '', cb, ctx, ARR_END)
+        ELSE Parse := FALSE;
 END;
 
 END.

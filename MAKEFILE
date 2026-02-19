@@ -1,14 +1,87 @@
-all : rebuild.exe
-	rebuild
+all : DOS
 
-rebuild.exe: rebuild.pas
-	tpc rebuild.pas
+DOS: SYSTEM2.TPU WINCB.TPU STRBIN.TPU ARGS.TPU DBM.TPU DBB.TPU RC4.TPU ANSI.TPU QSORT.TPU STR.TPU ARRAYS.TPU KMINPUT.TPU DETECT.TPU READARC.TPU PSON.TPU CSTRING.TPU RDFLOAD.TPU
+
+EXMS.TPU: EXMS.PAS
+        tpc EXMS.PAS
+        tputuner EXMS.TPU
+
+EXCACHE.TPU: EXCACHE.PAS EXMS.TPU
+        tpc EXCACHE.PAS
+        tputuner EXCACHE.TPU
+
+SYSTEM2.TPU: SYSTEM2.PAS EXCACHE.TPU
+        tpc /b SYSTEM2.PAS
+        tputuner SYSTEM2.TPU
+
+QSORT.TPU: QSORT.PAS
+        tpc /b QSORT.PAS
+        tputuner QSORT.TPU
+
+WINCB.TPU: WINCB.PAS
+        tpc /b WINCB.PAS
+        tputuner WINCB.TPU
+
+ARGS.TPU: ARGS.PAS
+        tpc /b ARGS.PAS
+        tputuner ARGS.TPU
+
+ANSI.TPU: ANSI.PAS
+        tpc /b ANSI.PAS
+        tputuner ANSI.TPU
+
+DBM.TPU: DBM.PAS SYSTEM2.PAS
+        tpc /b DBM.PAS
+        tputuner DBM.TPU
+
+RC4.TPU: RC4.PAS
+        tpc /b RC4.PAS
+        tputuner RC4.TPU
+
+STR.TPU: STR.PAS
+        tpc /b STR.PAS
+        tputuner STR.TPU
+
+DETECT.TPU: DETECT.PAS
+        tpc /b DETECT.PAS
+        tputuner DETECT.TPU
+
+STRBIN.TPU: STRBIN.PAS
+        tpc /b STRBIN.PAS
+        tputuner STRBIN.TPU
+
+ARRAYS.TPU: ARRAYS.PAS STR.TPU
+        tpc /b ARRAYS.PAS
+        tputuner ARRAYS.TPU
+
+KMINPUT.TPU: KMINPUT.PAS
+        tpc /b KMINPUT.PAS
+        tputuner KMINPUT.TPU
+
+DBB.TPU: DBB.PAS SYSTEM2.PAS
+        tpc /b DBB.PAS
+        tputuner DBB.TPU
+
+PSON.TPU: PSON.PAS
+        tpc /b PSON.PAS
+        tputuner PSON.TPU
+
+READARC.TPU: READARC.PAS SYSTEM2.PAS
+        tpc /b READARC.PAS
+        tputuner READARC.TPU
+
+CSTRING.TPU: CSTRING.PAS
+        tpc /b CSTRING.PAS
+        tputuner CSTRING.TPU
+
+RDFLOAD.TPU: RDFLOAD.PAS
+        tpc /b RDFLOAD.PAS
+        tputuner RDFLOAD.TPU
 
 clean:
         del *.TPU
+        del *.TPP
         del *.BAK
-        del *.EXE
-
 install: all
         copy *.tpu ..\TPU\
 

@@ -25,6 +25,10 @@
 
   Command line parser in modern style.
 
+#  LZJB
+
+  Port of LZJB compressor/decompressor.
+
 #  READARC
 
   Reading non-compressed archives: zip, ha, tar
