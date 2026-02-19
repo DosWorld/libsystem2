@@ -1,4 +1,3 @@
-{ (c) Stefan Reuther, Streu@gmx.de }
 {$M 4096,0,0}
 PROGRAM Rebuid;
 
@@ -9,7 +8,7 @@ MAX = 256;
 OPTIONS = '/m';
 
 VAR
-files   : ARRAY[1..MAX] OF STRING[8];
+files   : ARRAY[1..MAX] OF STRING[12];
 r       : SearchRec;
 i, j, k : INTEGER;
 tpc     : STRING;
