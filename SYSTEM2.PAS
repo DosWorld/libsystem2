@@ -496,6 +496,12 @@ BEGIN
                         Inc(s[0]);
                 END;
         END;
+        { DOS returns the path without the drive and without the leading '\':
+          make a full path (X:\DIR\), a relative one is wrong for the callers }
+        IF ORD(s[0]) > 250 THEN s[0] := #250;
+        IF d = 0 THEN d := GetCurrentDisk + 1;
+        IF (d >= 1) AND (d <= 26) THEN s := CHR(ORD('A') + d - 1) + ':\' + s
+        ELSE s := '\' + s;
         IF NOT (s[ORD(s[0])] IN ['\', '/']) THEN s := s + '\';
 END;
 
