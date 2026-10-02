@@ -110,7 +110,7 @@ BEGIN
         BASE_10:WHILE (i <= len) DO BEGIN
                         cc := src[i];
                         IF NOT (cc IN ['0'..'9']) THEN BREAK;
-                        r := r * 10 OR (ORD(cc) - $30);
+                        r := r * 10 + (ORD(cc) - $30);
                         Inc(i);
                 END;
         BASE_16:WHILE (i <= len) DO BEGIN
