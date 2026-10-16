@@ -323,6 +323,7 @@ ASM
         or        al, al
         jz        @nomouse
         mov       ax, 2
+        int       $33
         xor       al, al
         mov       mouse_state, al
 @nomouse:

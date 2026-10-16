@@ -217,7 +217,7 @@ BEGIN
                 h := ems_malloc(new_page_count);
                 IF h <> 0 THEN BEGIN
                         FillChar(emsrec, SizeOf(TEMSCOPYREC), #0);
-                        emsrec.len := old_page_count * EXT_PAGE_SIZE;
+                        emsrec.len := LONGINT(old_page_count) * EXT_PAGE_SIZE;
                         emsrec.src_type := 1;
                         emsrec.src_hnd := handle;
                         emsrec.dst_type := 1;
@@ -265,6 +265,7 @@ FUNCTION xms_malloc(pages : WORD) : WORD;ASSEMBLER;
 ASM
         MOV  BL, IsSXMS
         MOV  AX, pages
+        MOV  CL, 4
         OR   BL, BL
         JZ   @oldXms
         DB $66, $25, $FF, $FF, $00, $00 { AND  EAX, $FFFF }
@@ -272,7 +273,6 @@ ASM
         DB $66, $89, $C2                { MOV  EDX, EAX }
         JMP  @cont
 @oldXms:
-        MOV  CL, 4
         SHL  AX, CL
         MOV  DX, AX
 @cont:  MOV  AH, xmsAllocFn

@@ -95,6 +95,7 @@ END;
 
 PROCEDURE ChangeCapacity(VAR Arr : TArray; NewCapacity : WORD);
 VAR     NewData : PCHAR;
+        Keep    : WORD;
 BEGIN
         IF NewCapacity = 0 THEN Reset(Arr)
         ELSE BEGIN
@@ -102,10 +103,12 @@ BEGIN
                 ELSE NewData := Alloc(Arr.MemFrame^, NewCapacity * Arr.ElementSize);
                 IF NewData <> NIL THEN BEGIN
                         IF Arr.Data <> nil THEN BEGIN
-                                Move(PCHAR(Arr.Data)^, NewData^, Arr.Size * Arr.ElementSize);
-                                IF NewCapacity > Arr.Size THEN
-                                      FillChar(NewData[Arr.Size * Arr.ElementSize]
-                                      , (NewCapacity - Arr.Size) * Arr.ElementSize
+                                Keep := Arr.Size;
+                                IF Keep > NewCapacity THEN Keep := NewCapacity;
+                                Move(PCHAR(Arr.Data)^, NewData^, Keep * Arr.ElementSize);
+                                IF NewCapacity > Keep THEN
+                                      FillChar(NewData[Keep * Arr.ElementSize]
+                                      , (NewCapacity - Keep) * Arr.ElementSize
                                       , #0);
                                 IF Arr.MemFrame = NIL THEN FreeMem(Arr.Data, Arr.Capacity * Arr.ElementSize);
                         END;
@@ -118,6 +121,7 @@ END;
 PROCEDURE Add(VAR Arr : TArray; VAR Element);
 BEGIN
         IF Arr.Size = Arr.Capacity THEN ChangeCapacity(Arr, Arr.Capacity + ALLOC_STEP);
+        IF Arr.Size = Arr.Capacity THEN EXIT;
         Move(Element
         , (PCHAR(Arr.Data) + Arr.Size * Arr.ElementSize)^
         , Arr.ElementSize);
@@ -133,7 +137,7 @@ BEGIN
                 , (PCHAR(Arr.Data) + StartIndex * Arr.ElementSize)^
                 , (Arr.Size - StartIndex - Count) * Arr.ElementSize);
         DEC(Arr.Size, Count);
-        IF Arr.Size + ALLOC_STEP < Arr.Capacity - ALLOC_STEP * 2 THEN 
+        IF LONGINT(Arr.Capacity) > LONGINT(Arr.Size) + ALLOC_STEP * 3 THEN
                 ChangeCapacity(Arr, Arr.Size + ALLOC_STEP);
 END;
 
@@ -167,7 +171,11 @@ END;
 PROCEDURE SetLength(VAR Arr : TArray; NewLength : WORD);
 BEGIN
         IF Arr.Capacity < NewLength THEN ChangeCapacity(Arr, NewLength + ALLOC_STEP)
-        ELSE IF Arr.Capacity > NewLength + ALLOC_STEP THEN ChangeCapacity(Arr, NewLength);
+        ELSE IF LONGINT(Arr.Capacity) > LONGINT(NewLength) + ALLOC_STEP THEN ChangeCapacity(Arr, NewLength)
+        ELSE IF (NewLength > Arr.Size) AND (Arr.Data <> NIL) THEN
+                FillChar((PCHAR(Arr.Data) + Arr.Size * Arr.ElementSize)^
+                , (NewLength - Arr.Size) * Arr.ElementSize, #0);
+        IF NewLength > Arr.Capacity THEN NewLength := Arr.Capacity;
         Arr.Size := NewLength;
 END;
 
@@ -198,13 +206,13 @@ BEGIN
         Move(PCHAR(SourceArr.Data)[SourceStartIndex * SourceArr.ElementSize]
         , PCHAR(DestArr.Data)[DestStartIndex * DestArr.ElementSize]
         , Count * SourceArr.ElementSize);
-        INC(DestArr.Size, Count);
 END;
 
 PROCEDURE Insert(VAR Arr : TArray; Index: WORD; VAR Element);
 BEGIN
         IF Index > Arr.Size THEN EXIT;
-        IF Arr.Size = Arr.Capacity THEN SetLength(Arr, Arr.Capacity + ALLOC_STEP);
+        IF Arr.Size = Arr.Capacity THEN ChangeCapacity(Arr, Arr.Capacity + ALLOC_STEP);
+        IF Arr.Size = Arr.Capacity THEN EXIT;
 
         IF Index < Arr.Size THEN
                 Move(PCHAR(Arr.Data)[Index * Arr.ElementSize]

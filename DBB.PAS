@@ -77,6 +77,7 @@ BEGIN
 END;
 
 PROCEDURE dbb_Reset(VAR f : DBBFile; fname : STRING; blk_size : WORD);
+VAR     empty : BOOLEAN;
 BEGIN
         IF blk_size < SizeOf(LONGINT) THEN blk_size := SizeOf(LONGINT);
         FillChar(f, SizeOf(DBBFile), #0);
@@ -87,13 +88,15 @@ BEGIN
                 EXIT;
         END;
         IF SizeOf(DBB_HDR) <> BlockRead(f.f, f.header, SizeOf(DBB_HDR)) THEN BEGIN
+                empty := FileSize(f.f) = 0;
                 Close(f.f);
-                dbb_ReWrite(f, fname, blk_size);
+                IF empty THEN dbb_ReWrite(f, fname, blk_size)
+                ELSE FillChar(f, SizeOf(DBBFile), #0);
                 EXIT;
         END;
         IF (f.header.sign <> DBB_SIGN) OR (f.header.size <> blk_size) THEN BEGIN
                 Close(f.f);
-                dbb_ReWrite(f, fname, blk_size);
+                FillChar(f, SizeOf(DBBFile), #0);
         END;
 END;
 

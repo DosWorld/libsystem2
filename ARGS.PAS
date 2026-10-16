@@ -330,6 +330,10 @@ BEGIN
                 WHILE (i <= len) AND (s[i] <= ' ') DO Inc(i); { skip spaces }
         END;
         WHILE (i <= len) AND (NOT state.error) DO BEGIN
+                IF state.args_count >= MAX_OPTS THEN BEGIN
+                        SetArgsErr(state, 'Too many arguments.');
+                        BREAK;
+                END;
                 Inc(state.args_count);
                 Str(state.args_count, errMsg);
                 errMsg := ERR_BAD_ARG + ' #'+ errMsg;
@@ -357,6 +361,10 @@ VAR     i : INTEGER;
 BEGIN
         FillChar(state, SizeOf(TARGSTATE), #0);
         FOR i := Low(a) TO High(a) DO BEGIN
+                IF state.opts_size >= MAX_OPTS THEN BEGIN
+                        SetArgsErr(state, 'Too many options in the option table.');
+                        BREAK;
+                END;
                 Inc(state.opts_size);
                 state.opts[state.opts_size] := @a[i];
                 IF a[i].otype = OPTCMD THEN Inc(state.cmds_count)
@@ -455,6 +463,7 @@ FUNCTION GetOptStr(VAR state : TARGSTATE; name : STRING) : STRING;
 VAR i : INTEGER;
     r : STRING;
 BEGIN
+        r := '';
         i := LookupName(state, name);
         IF i <> -1 THEN BEGIN
                 IF state.opts[i]^.otype = OPTSTR THEN BEGIN

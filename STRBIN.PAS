@@ -76,7 +76,7 @@ BEGIN
         END ELSE IF (cc = '&') AND (nc = 'H') THEN BEGIN
                 base := BASE_16;
                 Inc(i, 2);
-        END ELSE IF (cc = '0') AND (nc = 'B') THEN BEGIN
+        END ELSE IF (cc = '0') AND (nc = 'B') AND (UPCASE(s[len]) <> 'H') THEN BEGIN
                 base := BASE_2;
                 Inc(i, 2);
         END ELSE IF (cc = '&') AND (nc = 'B') THEN BEGIN

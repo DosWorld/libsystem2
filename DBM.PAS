@@ -86,6 +86,7 @@ END;
 
 PROCEDURE dbm_Reset(VAR f : DBMFile; fname : STRING; blk_size : WORD);
 VAR     rblk_size : WORD;
+        empty     : BOOLEAN;
 BEGIN
         FillChar(f, SizeOf(DBMFile), #0);
         Assign(f.f, fname);
@@ -93,13 +94,15 @@ BEGIN
         rblk_size := _norm_blk_size(blk_size);
         IF NOT IsOpen(f.f) THEN dbm_rewrite(f, fname, blk_size)
         ELSE IF SizeOf(DBM_HDR) <> BlockRead(f.f, f.header, SizeOf(DBM_HDR)) THEN BEGIN
+                empty := FileSize(f.f) = 0;
                 Close(f.f);
-                dbm_ReWrite(f, fname, blk_size);
+                IF empty THEN dbm_ReWrite(f, fname, blk_size)
+                ELSE FillChar(f, SizeOf(DBMFile), #0);
         END ELSE IF (f.header.sign = DBM_SIGN) AND (f.header.size = rblk_size) THEN BEGIN
                 f.rblk_size := f.header.size - ADDED_DATA;
         END ELSE BEGIN
                 Close(f.f);
-                dbm_ReWrite(f, fname, blk_size);
+                FillChar(f, SizeOf(DBMFile), #0);
         END;
 END;
 
@@ -256,7 +259,7 @@ END;
 PROCEDURE dbm_Put(VAR f : DBMFile; rec : LONGINT; VAR b; size : WORD);
 VAR     crec : LONGINT;
 BEGIN
-        IF NOT IsOpen(f.f) THEN EXIT;
+        IF (NOT IsOpen(f.f)) OR (rec = 0) THEN EXIT;
         _go(f, rec);
         crec := ReadDWord(f.f);
         _go(f, rec);

@@ -108,6 +108,10 @@ VAR
   newKey: TMapKey;
   tIndex : INTEGER;
 BEGIN
+  IF Length(Key) > MAX_KEY_LENGTH THEN BEGIN
+    GetOrCreate := NIL;
+    EXIT;
+  END;
   CreateKeys(Key, newKey);
   tIndex := TableIndex(newKey.Hash);
   Entry := Table.Table[tIndex];
@@ -149,6 +153,10 @@ VAR
   newKey: TMapKey;
   tIndex : INTEGER;
 BEGIN
+  IF Length(Key) > MAX_KEY_LENGTH THEN BEGIN
+    Remove := FALSE;
+    EXIT;
+  END;
   CreateKeys(Key, newKey);
   tIndex := TableIndex(newKey.Hash);
   Entry := Table.Table[tIndex];
@@ -192,7 +200,7 @@ VAR
   Entry : PHashEntry;
 BEGIN
   Entry := GetOrCreate(Table, Key, TRUE);
-  Move(Value, Entry^.Value^, Table.ElementSize);
+  IF Entry <> NIL THEN Move(Value, Entry^.Value^, Table.ElementSize);
 END;
 
 FUNCTION ContainsKey(VAR Table: THashMap; Key: STRING): BOOLEAN;

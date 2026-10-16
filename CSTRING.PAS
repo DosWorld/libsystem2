@@ -91,11 +91,14 @@ ASM
         cmp   ax, bx
         jnz   @nooverlap
         cmp   di, si
-        jl    @nooverlap
+        jbe   @nooverlap
         std
         add   di, cx
         add   si, cx
+        dec   di
+        dec   si
         rep   movsb
+        cld
         jmp   @end
 @nooverlap:
         cld
@@ -112,20 +115,18 @@ ASM
         les   di, p1
         lds   si, p2
         cld
-@cont:
-        xor   ax, ax
-        or    cx, cx
+        xor   bx, bx
+@cont:  or    cx, cx
         jz    @diff
-        mov   ah, es:[di]
+        mov   bl, es:[di]
         inc   di
         lodsb
         dec   cx
-        cmp   ah, al
-        jnz   @diff
-        jmp   @cont
-@diff:  sub   ah, al
-        mov   al, ah
-        cbw
+        xor   bh, bh
+        xor   ah, ah
+        sub   bx, ax
+        jz    @cont
+@diff:  mov   ax, bx
         pop   ds
 END;
 
@@ -135,9 +136,10 @@ ASM
         cld
         mov   cx, num
         les   di, p
+        mov   al, c
+        jcxz  @notfound
         repne scasb
-        or    cx, cx
-        jz    @notfound
+        jnz   @notfound
         mov   dx, es
         mov   ax, di
         dec   ax
@@ -279,18 +281,16 @@ ASM
         les   di, str1
         lds   si, str2
         cld
-@cont:
-        mov   ah, es:[di]
+@cont:  mov   bl, es:[di]
         inc   di
         lodsb
-        cmp   ah, al
+        xor   bh, bh
+        xor   ah, ah
+        sub   bx, ax
         jnz   @diff
         or    al, al
-        jz    @diff
-        jmp   @cont
-@diff:  sub   ah, al
-        mov   al, ah
-        cbw
+        jnz   @cont
+@diff:  mov   ax, bx
         pop   ds
 END;
 
@@ -301,46 +301,37 @@ ASM
         les   di, str1
         lds   si, str2
         cld
-@cont:  xor   ax, ax
-        or    cx, cx
+        xor   bx, bx
+@cont:  or    cx, cx
         jz    @diff
-        mov   ah, es:[di]
+        mov   bl, es:[di]
         inc   di
         lodsb
         dec   cx
-        cmp   ah, al
+        xor   bh, bh
+        xor   ah, ah
+        sub   bx, ax
         jnz   @diff
         or    al, al
-        jz    @diff
-        jmp   @cont
-@diff:  sub   ah, al
-        mov   al, ah
-        cbw
+        jnz   @cont
+@diff:  mov   ax, bx
         pop   ds
 END;
 
 FUNCTION strchr(p : PCHAR; c : CHAR) : PCHAR;ASSEMBLER;
 ASM
         push  es
-        cld
-        mov   al, 0
         les   di, p
-        push  di
-        mov   cx, $FFFF
-        push  cx
-        repne scasb
-        neg   cx
-        mov   bx, cx
-        mov   al, c
-        pop   cx
-        pop   di
-        repne scasb
-        neg   cx
-        cmp   cx, bx
-        jnc   @notfound
-        mov   dx, es
+        mov   ah, c
+@cont:  mov   al, es:[di]
+        cmp   al, ah
+        je    @found
+        or    al, al
+        jz    @notfound
+        inc   di
+        jmp   @cont
+@found: mov   dx, es
         mov   ax, di
-        dec   ax
         jmp   @end
 @notfound:
         xor   ax, ax
@@ -352,26 +343,20 @@ END;
 FUNCTION strrchr(p : PCHAR; c : CHAR) : PCHAR;ASSEMBLER;
 ASM
         push  es
-        cld
-        mov   al, 0
         les   di, p
-        mov   cx, $FFFF
-        cld
-        repne scasb
-        neg   cx
-        inc   cx
-        mov   al, c
-        std
-        repne scasb
-        or    cx, cx
-        jz    @notfound
-        mov   dx, es
-        mov   ax, di
-        inc   ax
-        jmp   @end
-@notfound:
+        mov   cl, c
         xor   ax, ax
         mov   dx, ax
+@cont:  mov   bl, es:[di]
+        cmp   bl, cl
+        jne   @nomatch
+        mov   ax, di
+        mov   dx, es
+@nomatch:
+        or    bl, bl
+        jz    @end
+        inc   di
+        jmp   @cont
 @end:
         pop   es
 END;
@@ -388,8 +373,8 @@ BEGIN
         ELSE BEGIN
                 r := strchr(str1, str2^);
                 WHILE r <> NIL DO BEGIN
-                        IF memcmp(r, str2, len) = 0 THEN BREAK;
-                        str1 := r + 1;
+                        IF memcmp(r^, str2^, len) = 0 THEN BREAK;
+                        r := strchr(r + 1, str2^);
                 END;
         END;
         END;

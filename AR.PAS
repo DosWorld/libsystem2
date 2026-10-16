@@ -96,7 +96,7 @@ BEGIN
                         END;
                 END;
                 Seek(f, FilePos(f) + c.size);
-                IF (FilePos(f) AND 1) <> 0 THEN Seek(f, FilePos(f) + 1);
+                IF ((FilePos(f) - ofs) AND 1) <> 0 THEN Seek(f, FilePos(f) + 1);
                 dynarr.Add(FileArray, c);
         END;
 END;
@@ -136,11 +136,16 @@ VAR
     i       : INTEGER;
 BEGIN
         IF (FilePos(f) AND 1) <> 0 THEN BEGIN
-                i := 0;
+                i := $0A;
                 BlockWrite(f, i, 1);
         END;
         name := name + '/';
-        FillChar(frec, SizeOf(frec), #0);
+        FillChar(frec, SizeOf(frec), ' ');
+        frec.mod_time[1] := '0';
+        frec.owner[1] := '0';
+        frec.group[1] := '0';
+        s := '100644';
+        Move(s[1], frec.attr, 6);
         frec.ending := $0A60;
         i := Length(name);
         IF i > 16 THEN i := 16;

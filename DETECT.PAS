@@ -143,6 +143,7 @@ END;
 
 FUNCTION GetCpu : WORD; ASSEMBLER;
 ASM
+        PUSHF
         XOR  DX, DX
         PUSH DX
         POPF
@@ -161,6 +162,7 @@ ASM
         JZ   @end
         INC  DX
 @end:
+        POPF
         MOV  AX, DX
 END;
 

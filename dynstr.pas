@@ -54,7 +54,8 @@ BEGIN
         S.Len := 0;
         S.Capacity := InitialCapacity;
         S.Frame := Frame;
-        GetMem(S.Data, S.Capacity);
+        IF Frame = NIL THEN GetMem(S.Data, S.Capacity)
+        ELSE S.Data := Alloc(Frame^, S.Capacity);
         S.Data[0] := #0;
 END;
 
@@ -86,7 +87,7 @@ BEGIN
 
         InsertLen := StrLen(Str);
         NewLen := S.Len + InsertLen;
-        IF NewLen > S.Capacity THEN ResizeString(S, NewLen * 2);
+        IF NewLen + 1 > S.Capacity THEN ResizeString(S, NewLen + 32);
         Move(S.Data[Position], S.Data[Position + InsertLen], S.Len - Position + 1);
         Move(Str^, S.Data[Position], InsertLen);
         S.Len := NewLen;

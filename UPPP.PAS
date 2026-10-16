@@ -174,34 +174,47 @@ BEGIN
 END;
 
 PROCEDURE DecompressFile(src_name, dst_name : STRING);
-CONST
-OUTBUFSIZE = SIZ1*9+9;
+TYPE
+TBufP = ARRAY[0..SIZ1+9] OF CHAR;
+TBufC = ARRAY[0..SIZ1*9+9] OF CHAR;
 VAR
-        BufP: ARRAY[0..SIZ1+9] OF CHAR;
-        BufC: ARRAY[0..OUTBUFSIZE] OF CHAR;
-        GuessTable: PPP_TABLE;
+        BufP: ^TBufP;
+        BufC: ^TBufC;
+        GuessTable: ^PPP_TABLE;
         Hash: PPP_HASH_TYPE;
         Len1, Len2, Len3: INTEGER;
         INF, OUTF : BFILE;
 BEGIN
         Len1 := 0;
-        Init(GuessTable, Hash);
+        GetMem(BufP, SizeOf(TBufP));
+        GetMem(BufC, SizeOf(TBufC));
+        GetMem(GuessTable, SizeOf(PPP_TABLE));
+        IF (BufP = NIL) OR (BufC = NIL) OR (GuessTable = NIL) THEN BEGIN
+                IF BufP <> NIL THEN FreeMem(BufP, SizeOf(TBufP));
+                IF BufC <> NIL THEN FreeMem(BufC, SizeOf(TBufC));
+                IF GuessTable <> NIL THEN FreeMem(GuessTable, SizeOf(PPP_TABLE));
+                EXIT;
+        END;
+        Init(GuessTable^, Hash);
         Assign(INF, src_name);
         Reset(INF);
         Assign(OUTF, dst_name);
         ReWrite(OUTF);
         WHILE NOT EOF(INF) DO BEGIN
-                Len3 := BlockRead(INF, BufP[Len1], SIZ1);
+                Len3 := BlockRead(INF, BufP^[Len1], SIZ1);
                 INC(Len1, Len3);
                 Len3 := Len1;
-                Len2 := Decompress(@BufP, @BufC, Len1, FALSE, GuessTable, Hash);
-                BlockWrite(OUTF, BufC, Len2);
-                Move(BufP[Len3 - Len1], BufP, Len1);
+                Len2 := Decompress(@BufP^, @BufC^, Len1, FALSE, GuessTable^, Hash);
+                BlockWrite(OUTF, BufC^, Len2);
+                Move(BufP^[Len3 - Len1], BufP^, Len1);
         END;
-        Len2 := Decompress(@BufP, @BufC, Len1, TRUE, GuessTable, Hash);
-        BlockWrite(OUTF, BufC, Len2);
+        Len2 := Decompress(@BufP^, @BufC^, Len1, TRUE, GuessTable^, Hash);
+        BlockWrite(OUTF, BufC^, Len2);
         Close(INF);
         Close(OUTF);
+        FreeMem(BufP, SizeOf(TBufP));
+        FreeMem(BufC, SizeOf(TBufC));
+        FreeMem(GuessTable, SizeOf(PPP_TABLE));
 END;
 
 END.

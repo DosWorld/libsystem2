@@ -179,6 +179,7 @@ VAR     chdr    : ZIP_CHEADER;
         lhdr    : ZIP_LHEADER;
         s       : STRING;
         r, l, t : PFILE_ENTRY;
+        n       : WORD;
 BEGIN
         r := NIL;
         l := NIL;
@@ -188,8 +189,11 @@ BEGIN
                 WHILE NOT Eof(f) DO BEGIN
                         BlockRead(f, lhdr, SizeOf(ZIP_LHEADER));
                         IF lhdr.sign <> ZIP_LSIG THEN BREAK;
-                        BlockRead(f, s[1], lhdr.fnamelen);
-                        s[0] := CHR(lhdr.fnamelen);
+                        n := lhdr.fnamelen;
+                        IF n > 255 THEN n := 255;
+                        BlockRead(f, s[1], n);
+                        s[0] := CHR(n);
+                        IF lhdr.fnamelen > n THEN Seek(f, FilePos(f) + lhdr.fnamelen - n);
                         l := FE_CREATE(l, s);
                         l^.ofs := FilePos(f) + lhdr.extrafield;
                         Seek(f, l^.ofs + lhdr.csize);
@@ -199,8 +203,11 @@ BEGIN
                         WHILE NOT Eof(f) DO BEGIN
                                 BlockRead(f, chdr, SizeOf(ZIP_CHEADER));
                                 IF chdr.sign <> ZIP_CSIG THEN BREAK;
-                                BlockRead(f, s[1], chdr.fnamelen);
-                                s[0] := CHR(chdr.fnamelen);
+                                n := chdr.fnamelen;
+                                IF n > 255 THEN n := 255;
+                                BlockRead(f, s[1], n);
+                                s[0] := CHR(n);
+                                IF chdr.fnamelen > n THEN Seek(f, FilePos(f) + chdr.fnamelen - n);
                                 IF FE_FIND(l, s, t) THEN BEGIN
                                         r := FE_CREATE(r, s);
                                         r^.ctype := chdr.compress;

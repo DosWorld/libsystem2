@@ -25,7 +25,7 @@ UNIT RC4;
 INTERFACE
 
 TYPE
-RC4_SEED = ARRAY[0..255] OF BYTE;
+RC4_SEED = ARRAY[0..257] OF BYTE;
 
 PROCEDURE rc4_init(VAR seed : RC4_SEED; password : STRING);
 PROCEDURE rc4_crypt(VAR seed : RC4_SEED; VAR buf; size : WORD);
@@ -36,12 +36,16 @@ PROCEDURE rc4_init(VAR seed : RC4_SEED; password : STRING);
 VAR     i, j : INTEGER;
         len  : INTEGER;
         x    : BYTE;
+        k    : INTEGER;
 BEGIN
         FOR i := 0 TO 255 DO seed[i] := i;
+        seed[256] := 0;
+        seed[257] := 0;
         len := Length(password);
         j := 0;
         FOR i := 0 TO 255 DO BEGIN
-                j := (j + seed[i] + ORD(password[(i MOD len) + 1])) AND $FF;
+                IF len = 0 THEN k := 0 ELSE k := ORD(password[(i MOD len) + 1]);
+                j := (j + seed[i] + k) AND $FF;
                 x := seed[i];
                 seed[i] := seed[j];
                 seed[j] := x;
@@ -53,14 +57,12 @@ VAR     i, j : INTEGER;
         x    : BYTE;
         src  : PCHAR;
 BEGIN
-        i := 0;
-        j := 0;
+        i := seed[256];
+        j := seed[257];
         src := @buf;
         WHILE size <> 0 DO BEGIN
-                Inc(i);
-                i := i AND $FF;
-                Inc(j);
-                j := j AND $FF;
+                i := (i + 1) AND $FF;
+                j := (j + seed[i]) AND $FF;
                 x := seed[i];
                 seed[i] := seed[j];
                 seed[j] := x;
@@ -68,6 +70,8 @@ BEGIN
                 Inc(src);
                 Dec(size);
         END;
+        seed[256] := i;
+        seed[257] := j;
 END;
 
 END.

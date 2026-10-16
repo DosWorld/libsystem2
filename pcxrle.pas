@@ -39,7 +39,7 @@ BEGIN
     WHILE len <> 0 DO BEGIN
         count := 1;
         c := src^;
-        WHILE (count <= len) AND (c = src[count]) AND (count < 63) DO INC(count);
+        WHILE (count < len) AND (c = src[count]) AND (count < 63) DO INC(count);
         IF (count > 1) OR ((ORD(c) AND $C0) = $C0) THEN BEGIN
             dst^ := CHR($C0 OR count);
             INC(dst);
@@ -65,6 +65,7 @@ BEGIN
     WHILE len <> 0 DO BEGIN
         c := src^;
         IF (ORD(c) AND $C0) = $C0 THEN BEGIN
+            IF len < 2 THEN BREAK;
             count := ORD(c) AND $3F;
             INC(src);
             DEC(len);

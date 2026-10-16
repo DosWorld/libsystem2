@@ -93,7 +93,7 @@ ASM
         JZ   @end
         INC  BX
 @end:
-        MOV  BX, AX
+        MOV  AX, BX
 END;
 
 FUNCTION WCB_GetData(VAR d) : BOOLEAN;ASSEMBLER;
@@ -120,15 +120,26 @@ ASM
 END;
 
 FUNCTION WCB_Copy(VAR d; size : WORD) : BOOLEAN;
-VAR     r : BOOLEAN;
+VAR     r     : BOOLEAN;
+        rsize : WORD;
+        tmp   : PCHAR;
 BEGIN
         r := FALSE;
         IF WCB_Detect THEN
-                IF WCB_Open THEN
+                IF WCB_Open THEN BEGIN
                         IF WCB_Clear THEN BEGIN
-                                r := WCB_SetData(d, (size AND $FFE0) OR $1F);
-                                WCB_Close;
+                                rsize := (size AND $FFE0) OR $1F;
+                                IF rsize < size THEN rsize := size;
+                                GetMem(tmp, rsize);
+                                IF tmp <> NIL THEN BEGIN
+                                        FillChar(tmp^, rsize, #0);
+                                        Move(d, tmp^, size);
+                                        r := WCB_SetData(tmp^, rsize);
+                                        FreeMem(tmp, rsize);
+                                END;
                         END;
+                        WCB_Close;
+                END;
         WCB_Copy := r;
 END;
 
@@ -141,7 +152,7 @@ BEGIN
         IF WCB_Detect THEN
                 IF WCB_Open THEN BEGIN
                         size := WCB_GetDataSize;
-                        IF (size - 1) < max_size THEN BEGIN
+                        IF (size > 0) AND (size < max_size) THEN BEGIN
                                 r := WCB_GetData(d);
                                 IF r THEN BEGIN
                                         p := @d;

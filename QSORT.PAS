@@ -47,16 +47,18 @@ PROCEDURE SortLong(info : POINTER; left, right : LONGINT; cmp : QS_CMP_LONG; swa
 IMPLEMENTATION
 
 PROCEDURE Sort(info : POINTER; left, right : WORD; cmp : QS_CMP; swap : QS_SWAP);
-VAR     lower, upper, middle : WORD;
+VAR     lower, upper, middle : LONGINT;
 BEGIN
         lower := left;
         upper := right;
-        middle:= ((right - left) shr 1) + left;
+        middle:= ((LONGINT(right) - left) shr 1) + left;
         REPEAT
                 WHILE cmp(info, lower, middle) < 0 DO Inc(lower);
                 WHILE cmp(info, middle, upper) < 0 DO Dec(upper);
                 IF lower <= upper THEN BEGIN
                         Swap(info, lower, upper);
+                        IF middle = lower THEN middle := upper
+                        ELSE IF middle = upper THEN middle := lower;
                         Inc(lower);
                         Dec(upper);
                 END;
@@ -76,6 +78,8 @@ BEGIN
                 WHILE cmp(info, middle, upper) < 0 DO Dec(upper);
                 IF lower <= upper THEN BEGIN
                         Swap(info, lower, upper);
+                        IF middle = lower THEN middle := upper
+                        ELSE IF middle = upper THEN middle := lower;
                         Inc(lower);
                         Dec(upper);
                 END;

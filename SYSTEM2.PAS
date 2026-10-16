@@ -79,6 +79,7 @@ BFILE = RECORD
         wcache      : POINTER;
 {$ENDIF}
         delonclose  : BOOLEAN;
+        werror      : INTEGER;
 END;
 
 PROCEDURE Assign (VAR f : BFILE; fname : STRING);
@@ -241,6 +242,10 @@ ASM
         INT  $21
         JNC  @end
 
+        MOV  AX, $3D00
+        INT  $21
+        JNC  @end
+
         MOV  RES, AX
         XOR  AX, AX
 @end:
@@ -320,7 +325,7 @@ ASM
         XOR  AX, AX
         MOV  RES, AX
         PUSH DS
-        MOV  DI, offset fname + 1
+        MOV  DX, offset fname + 1
         XOR  CX, CX
         MOV  AX, seg fname
         MOV  DS, AX
@@ -496,8 +501,6 @@ BEGIN
                         Inc(s[0]);
                 END;
         END;
-        { DOS returns the path without the drive and without the leading '\':
-          make a full path (X:\DIR\), a relative one is wrong for the callers }
         IF ORD(s[0]) > 250 THEN s[0] := #250;
         IF d = 0 THEN d := GetCurrentDisk + 1;
         IF (d >= 1) AND (d <= 26) THEN s := CHR(ORD('A') + d - 1) + ':\' + s
@@ -663,7 +666,9 @@ BEGIN
         f.ioresult := 0;
         fname := f.filename + #0;
         f.f := lReset;
-        IF f.f = 0 THEN f.ioresult := 2;
+        IF f.f = 0 THEN BEGIN
+                IF res <> 0 THEN f.ioresult := res ELSE f.ioresult := 2;
+        END;
         f.is_open := f.ioresult = 0;
         f.buf_count := 0;
         f.buf_pos := 0;
@@ -690,7 +695,8 @@ END;
 PROCEDURE Append (VAR f : BFILE);
 BEGIN
         Reset(f);
-        IF f.is_open THEN Seek(f, FileSize(f)) ELSE ReWrite(f);
+        IF f.is_open THEN Seek(f, FileSize(f))
+        ELSE IF (f.ioresult = 2) OR (f.ioresult = 3) THEN ReWrite(f);
 END;
 
 PROCEDURE ReWriteTemp(VAR f : BFILE);
@@ -721,18 +727,30 @@ PROCEDURE UpdateFileSize(VAR f : BFILE);
 VAR     ns : DWORD;
 BEGIN
         ns := DWORD(f.buf_page) * SizeOf(BFILE_BUF) + f.buf_count;
-        IF f.fsize < ns THEN f.fsize := ns;
+        IF (f.buf_count <> 0) AND (f.fsize < ns) THEN f.fsize := ns;
+END;
+
+PROCEDURE PageWrite(VAR f : BFILE; page : DWORD; VAR buf; count : WORD);
+VAR     n : WORD;
+BEGIN
+        lSeek(f.f, SEEK_BEG, page * SizeOf(BFILE_BUF));
+        n := lWrite(f.f, buf, count);
+        IF (res <> 0) OR (n <> count) THEN BEGIN
+                f.werror := 101;
+                f.ioresult := 101;
+        END;
 END;
 
 FUNCTION Eof(VAR f : BFILE) : BOOLEAN;
 BEGIN
         IF NOT f.is_open THEN BEGIN
                 f.ioresult := 103;
+                Eof := TRUE;
                 EXIT;
         END;
         f.ioresult := 0;
         UpdateFileSize(f);
-        Eof := (f.buf_page * SizeOf(BFILE_BUF) + f.buf_pos) = f.fsize;
+        Eof := (DWORD(f.buf_page) * SizeOf(BFILE_BUF) + f.buf_pos) >= f.fsize;
 END;
 
 
@@ -757,8 +775,7 @@ BEGIN
         END;
 {$ENDIF}
         IF f.buf_update THEN BEGIN
-                lSeek(f.f, SEEK_BEG, f.buf_page * SizeOf(BFILE_BUF));
-                lWrite(f.f, f.buf^, f.buf_count);
+                PageWrite(f, f.buf_page, f.buf^, f.buf_count);
                 f.buf_update := FALSE;
         END;
 
@@ -783,6 +800,7 @@ BEGIN
         IF res <> 0 THEN BEGIN
                 f.ioresult := 100;
         END;
+        IF f.werror <> 0 THEN f.ioresult := f.werror;
 END;
 
 PROCEDURE SwitchPage(VAR f : BFILE; new_page : DWORD);
@@ -830,6 +848,7 @@ VAR     p     : PCHAR;
 BEGIN
         IF NOT f.is_open THEN BEGIN
                 f.ioresult := 104;
+                BlockRead := 0;
                 EXIT;
         END;
         f.ioresult := 0;
@@ -939,8 +958,7 @@ BEGIN
                 END;
 {$ENDIF}
                 IF f.buf_update THEN BEGIN
-                        lSeek(f.f, SEEK_BEG, f.buf_page * SizeOf(BFILE_BUF));
-                        lWrite(f.f, f.buf^, f.buf_count);
+                        PageWrite(f, f.buf_page, f.buf^, f.buf_count);
                         f.buf_update := FALSE;
                 END;
 {$IFDEF USE_CACHE}
@@ -951,8 +969,7 @@ BEGIN
                                 bp := PEXCACHE(f.wcache)^.items[i].recno;
                                 bc := PEXCACHE(f.wcache)^.items[i].count;
                                 excache_get(PEXCACHE(f.wcache), bp, f.buf^, bc);
-                                lSeek(f.f, SEEK_BEG, bp * SizeOf(BFILE_BUF));
-                                lWrite(f.f, f.buf^, bc);
+                                PageWrite(f, bp, f.buf^, bc);
                                 buf_used := TRUE;
                         END;
                 END;
@@ -964,6 +981,7 @@ BEGIN
                 END;
 {$ENDIF}
         END;
+        IF f.werror <> 0 THEN f.ioresult := f.werror;
 END;
 
 PROCEDURE FsClose(VAR f : BFILE);
@@ -978,12 +996,15 @@ BEGIN
 END;
 
 PROCEDURE Close(VAR f : BFILE);
+VAR     werr : INTEGER;
 BEGIN
+        werr := 0;
         res := 0;
         f.ioresult := 0;
 
         IF NOT f.is_open THEN EXIT;
         IF NOT f.delonclose THEN Flush(f);
+        werr := f.werror;
         IF f.filetype = FS_FILE THEN FsClose(f);
 {$IFDEF USE_CACHE}
         excache_free(PEXCACHE(f.rcache));
@@ -991,6 +1012,7 @@ BEGIN
 {$ENDIF}
         IF f.buf <> NIL THEN FreeMem(f.buf, SizeOf(BFILE_BUF));
         FillChar(f, SizeOf(BFILE), #0);
+        f.ioresult := werr;
 END;
 
 PROCEDURE Write(VAR f : BFILE; s : STRING);
@@ -1012,15 +1034,17 @@ END;
 
 PROCEDURE ReadAsciiz(VAR f : BFile; VAR s : STRING);
 VAR     p       : LONGINT;
+        n       : WORD;
 BEGIN
         p := FilePos(f);
-        BlockRead(f, s[1], 255);
+        n := BlockRead(f, s[1], 255);
         s[0] := #0;
-        WHILE s[0] < #255 DO BEGIN
+        WHILE ORD(s[0]) < n DO BEGIN
                 IF s[ord(s[0]) + 1] = #0 THEN BREAK;
                 Inc(s[0]);
         END;
-        Seek(f, p + ord(s[0]) + 1);
+        IF (ORD(s[0]) < n) OR (n = 255) THEN Seek(f, p + ord(s[0]) + 1)
+        ELSE Seek(f, p + ord(s[0]));
 END;
 
 PROCEDURE ReadLn(VAR f : BFILE; VAR s : STRING);
@@ -1089,7 +1113,7 @@ BEGIN
         fname := f.filename + #0;
         lErase;
         f.ioresult := res;
-        IF f.ioresult = 0 THEN f.ioresult := 2 ELSE f.ioresult := 0;
+        IF res <> 0 THEN f.ioresult := 2 ELSE f.ioresult := 0;
 END;
 
 FUNCTION BlockCopy (VAR src, dst : BFILE; count : DWORD) : DWORD;
@@ -1295,13 +1319,31 @@ BEGIN
         IF f.is_open AND (f.filetype = FS_FILE) THEN f.delonclose := flag;
 END;
 
+FUNCTION lGetAttr : WORD;ASSEMBLER;
+ASM
+        PUSH DS
+        MOV  DX, offset fname + 1
+        MOV  AX, seg fname
+        MOV  DS, AX
+        XOR  BL, BL
+        STC
+        MOV  AX, $7143
+        INT  $21
+        JNC  @ok
+        MOV  AX, $4300
+        INT  $21
+        JNC  @ok
+        MOV  CX, $FFFF
+@ok:    MOV  AX, CX
+        POP  DS
+END;
+
 FUNCTION FileExists(s : STRING):BOOLEAN;
-VAR h : WORD;
+VAR a : WORD;
 BEGIN
         fname := s + #0;
-        h := lReset;
-        IF h <> 0 THEN lclose(h);
-        FileExists := h <> 0;
+        a := lGetAttr;
+        FileExists := (a <> $FFFF) AND ((a AND $18) = 0);
 END;
 
 PROCEDURE FileDelete(s : STRING);

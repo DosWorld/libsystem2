@@ -67,6 +67,7 @@ BEGIN
         i := Length(s);
         WHILE i <> 0 DO BEGIN
                 IF s[i] = '.' THEN BREAK;
+                IF s[i] IN ['\', '/', ':'] THEN BEGIN i := 0; BREAK; END;
                 Dec(i);
         END;
         IF i = 0 THEN r := '' ELSE r := copy(s, i + 1, Length(s) - i);
@@ -262,7 +263,7 @@ ASM
 @cont1:
         cmp        ah, 'A'
         jl         @cont2
-        cmp        ah, 'f'
+        cmp        ah, 'F'
         jg         @cont2
         dec        al
         jmp        @end
@@ -309,10 +310,7 @@ FUNCTION ltrim(s : STRING):STRING;
 VAR k, l : INTEGER;
 BEGIN
         k := 1; l := Length(s);
-        WHILE k < l DO BEGIN
-                IF s[k] > ' ' THEN BREAK;
-                Inc(k);
-        END;
+        WHILE (k <= l) AND (s[k] <= ' ') DO Inc(k);
         IF k <> 1 THEN s := copy(s, k, l - k + 1);
         ltrim := s;
 END;
@@ -383,7 +381,7 @@ BEGIN
 END;
 
 FUNCTION atow(s : STRING; default_val : WORD) : WORD;
-VAR res : INTEGER; err_pos : INTEGER;
+VAR res : WORD; err_pos : INTEGER;
 BEGIN
      Val(s, res, err_pos);
      IF err_pos <> 0 THEN res := default_val;
@@ -397,6 +395,7 @@ VAR r  : BYTE;
     k  : BYTE;
 BEGIN
         r := 0;
+        IF Length(str) = 0 THEN str := '00';
         IF Length(str) = 1 THEN str := '0' + str;
         upstr(str);
         IF Length(str) > 2 THEN str := Copy(str, 1, 2);
@@ -436,18 +435,21 @@ ASM
         mov        ah, c
         lds        si, s
         mov        bx, -1
+        xor        dx, dx
         cld
         lodsb
         mov        cl, al
 @cont:
         or         cl, cl
-        jz         @end;
+        jz         @end
         lodsb
         dec        cl
         cmp        al, ah
-        jne        @cont
-        mov        bl, cl
-        xor        bh, bh
+        je         @found
+        inc        dx
+        jmp        @cont
+@found:
+        mov        bx, dx
 @end:
         mov        ax, bx
         pop        ds

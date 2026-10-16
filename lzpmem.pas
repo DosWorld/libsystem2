@@ -101,7 +101,7 @@ BEGIN
                 INC(input);
                 DEC(len);
                 i := 0;
-                WHILE (i <= 7) AND (len <> 0) DO BEGIN
+                WHILE (i <= 7) AND ((len <> 0) OR ((mask AND (1 SHL i)) <> 0)) DO BEGIN
                         IF (mask AND (1 SHL i)) <> 0 THEN c := HashTable[hash]
                         ELSE BEGIN
                                 c := input^;

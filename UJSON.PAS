@@ -116,6 +116,7 @@ OBJ_START = '{';
 OBJ_END   = '}';
 ARR_START = '[';
 ARR_END   = ']';
+MAX_DEPTH = 12;
 
 FUNCTION SkipSpaces(VAR p : PCHAR) : CHAR; BEGIN WHILE (p^ <> #0) AND (p^ <= ' ') DO INC(p); SkipSpaces := p^; END;
 
@@ -133,6 +134,7 @@ BEGIN
 	IF IsChr(p, '"') THEN BEGIN
 		WHILE NOT (p^ IN [#0, '"']) DO BEGIN
 			IF IsChr(p, '\') THEN BEGIN
+				IF p^ = #0 THEN BREAK;
 				c := p^;
 				CASE c OF
 				'0': c := #0;
@@ -155,12 +157,14 @@ BEGIN
 	ParseSimpleValue := r;
 END;
 
-FUNCTION ParseObject(VAR p : PCHAR; prefix : STRING; cb : UJSON_CALL_BACK; ctx : POINTER; endchr : CHAR) : BOOLEAN;
+FUNCTION ParseObject(VAR p : PCHAR; prefix : STRING; cb : UJSON_CALL_BACK; ctx : POINTER;
+	endchr : CHAR; depth : INTEGER) : BOOLEAN;
 VAR ckey : STRING;
     cval : STRING;
 	r    : BOOLEAN;
 	i    : LONGINT;
 BEGIN
+	IF depth > MAX_DEPTH THEN BEGIN ParseObject := FALSE; EXIT; END;
 	r := TRUE;
 	i := 0;
 	WHILE (NOT (SkipSpaces(p) IN [#0, OBJ_END, ARR_END])) AND r DO BEGIN
@@ -172,8 +176,8 @@ BEGIN
 			IF NOT IsChr(p, ':') THEN BEGIN r := FALSE; BREAK; END;
 			SkipSpaces(p);
 		END;
-		IF IsChr(p, OBJ_START) THEN r := ParseObject(p, prefix + ckey + '.', cb, ctx, OBJ_END)
-		ELSE IF IsChr(p, ARR_START) THEN r := ParseObject(p, prefix + ckey + '.', cb, ctx, ARR_END)
+		IF IsChr(p, OBJ_START) THEN r := ParseObject(p, prefix + ckey + '.', cb, ctx, OBJ_END, depth + 1)
+		ELSE IF IsChr(p, ARR_START) THEN r := ParseObject(p, prefix + ckey + '.', cb, ctx, ARR_END, depth + 1)
 		ELSE BEGIN
 			cval := ParseSimpleValue(p);
 			r := cb(prefix + ckey, cval, ctx);
@@ -193,8 +197,8 @@ END;
 FUNCTION Parse(p : PCHAR; cb : UJSON_CALL_BACK; ctx : POINTER) : BOOLEAN;
 BEGIN
 	SkipSpaces(p);
-	IF IsChr(p, OBJ_START) THEN Parse := ParseObject(p, '', cb, ctx, OBJ_END)
-	ELSE IF IsChr(p, ARR_START) THEN Parse := ParseObject(p, '', cb, ctx, ARR_END)
+	IF IsChr(p, OBJ_START) THEN Parse := ParseObject(p, '', cb, ctx, OBJ_END, 0)
+	ELSE IF IsChr(p, ARR_START) THEN Parse := ParseObject(p, '', cb, ctx, ARR_END, 0)
 	ELSE Parse := FALSE;
 END;
 

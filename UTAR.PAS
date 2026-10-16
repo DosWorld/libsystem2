@@ -151,7 +151,7 @@ BEGIN
     i := p MOD TAR_BLOCKSIZE;
     IF i <> 0 THEN Seek(f, p + (TAR_BLOCKSIZE - i));
     BlockRead(f, buf, TAR_BLOCKSIZE);
-    IF GetStrMem(buf, 258, 7) = TAR_USTAR THEN BEGIN
+    IF GetStrMem(buf, 258, 5) = 'ustar' THEN BEGIN
 		filename := GetStrMem(buf, 1, 100);
 		str := GetStrMem(buf, 125, 12);
 		filesize := 0;
